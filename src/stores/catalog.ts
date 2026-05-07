@@ -132,6 +132,17 @@ export const useCatalogStore = defineStore('catalog', () => {
     if (target) target.employeeNo = employeeNo.trim()
   }
 
+  async function updateStaffName(id: string, name: string) {
+    const { error: err } = await supabase
+      .from('staff_profiles')
+      .update({ display_name: name.trim() })
+      .eq('id', id)
+
+    if (err) throw err
+    const target = staff.value.find((m) => m.id === id)
+    if (target) target.name = name.trim()
+  }
+
   async function updateStaffOrg(id: string, orgId: number | null) {
     const { error: err } = await supabase
       .from('staff_profiles')
@@ -680,6 +691,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     updateLessonProgress,
     toggleStaffStatus,
     updateStaffEmployeeNo,
+    updateStaffName,
     updateStaffOrg,
     assignStaffRole,
     upsertOrganization,

@@ -11,6 +11,7 @@ const filterRoleKey = ref<string>('all')
 const filterEnabled = ref<'all' | 'enabled' | 'disabled'>('all')
 const editingId = ref<string | null>(null)
 const editEmployeeNo = ref('')
+const editName = ref('')
 const editRole = ref('student')
 const saving = ref(false)
 
@@ -31,6 +32,7 @@ function startEdit(id: string) {
   if (!target) return
   editingId.value = id
   editEmployeeNo.value = target.employeeNo
+  editName.value = target.name
   editRole.value = target.role
 }
 
@@ -46,6 +48,9 @@ async function saveEdit(id: string) {
   try {
     if (editEmployeeNo.value !== target.employeeNo) {
       await catalog.updateStaffEmployeeNo(id, editEmployeeNo.value)
+    }
+    if (editName.value.trim() && editName.value.trim() !== target.name) {
+      await catalog.updateStaffName(id, editName.value.trim())
     }
     if (canAssignRole.value && editRole.value !== target.role) {
       await catalog.assignStaffRole(id, editRole.value)
@@ -133,7 +138,7 @@ onMounted(async () => {
 
               <tr v-else class="editing-row">
                 <td><input v-model="editEmployeeNo" class="inline-input" placeholder="請輸入員編" /></td>
-                <td>{{ member.name }}</td>
+                <td><input v-model="editName" class="inline-input" placeholder="請輸入姓名" /></td>
                 <td>{{ member.email || '—' }}</td>
                 <td>
                   <select v-model="editRole" class="inline-input" :disabled="!canAssignRole">

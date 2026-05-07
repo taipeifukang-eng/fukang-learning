@@ -175,8 +175,11 @@ onMounted(async () => {
                 @dragstart="handleDragStart(member.id)"
                 @dragend="handleDragEnd"
               >
-                <strong>{{ member.employeeNo || '未填員編' }}</strong>
-                <span>{{ member.name }}</span>
+                <div class="chip-info">
+                  <strong>{{ member.name || '未命名' }}</strong>
+                  <span>{{ member.employeeNo || '未填員編' }}</span>
+                </div>
+                <span class="drag-icon">☰</span>
               </article>
 
               <p v-if="unassignedStaff.length === 0" class="empty-text">沒有待編制人員。</p>
@@ -352,6 +355,18 @@ onMounted(async () => {
   display: block;
   font-size: 0.8rem;
   opacity: 0.7;
+}
+
+.chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.drag-icon {
+  font-size: 1rem;
+  opacity: 0.4;
+  flex-shrink: 0;
 }
 
 .member-list {

@@ -66,8 +66,14 @@ async function submitOrganization() {
     })
     resetForm()
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    saveError.value = msg.includes('unique') || msg.includes('duplicate')
+    // Supabase 回傳 PostgrestError（非原生 Error），需特別取 .message
+    const msg: string =
+      error instanceof Error
+        ? error.message
+        : (error as any)?.message
+          ?? (error as any)?.details
+          ?? JSON.stringify(error)
+    saveError.value = msg.includes('unique') || msg.includes('duplicate') || msg.includes('23505')
       ? `代號「${code.value}」已被其他組織使用，門市代號不可重複（代號 0000 的總部部門除外）。`
       : msg
     catalog.error = saveError.value

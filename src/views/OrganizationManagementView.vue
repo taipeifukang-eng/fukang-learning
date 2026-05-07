@@ -68,7 +68,7 @@ async function submitOrganization() {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     saveError.value = msg.includes('unique') || msg.includes('duplicate')
-      ? `代號「${code.value}」已存在同名限制，請改用不同代號，或到 Supabase 執行 patch_org_allow_dup_code.sql 取消唯一限制。`
+      ? `代號「${code.value}」已被其他組織使用，門市代號不可重複（代號 0000 的總部部門除外）。`
       : msg
     catalog.error = saveError.value
   } finally {

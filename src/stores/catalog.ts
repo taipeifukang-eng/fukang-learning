@@ -339,11 +339,42 @@ export const useCatalogStore = defineStore('catalog', () => {
   }
 
   // ── 課程管理 ──────────────────────────────────────────────
+  function mapCourseRows(data: any[]): typeof courses.value {
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      categoryId: row.category_id ?? null,
+      categoryName: row.categories?.name ?? '',
+      description: row.description ?? '',
+      enabled: row.enabled,
+      coverUrl: row.cover_url ?? '',
+      portalSections: row.portal_sections ?? [],
+      audiences: (row.course_audiences ?? []).map((a: any) => ({
+        id: a.id,
+        courseId: a.course_id,
+        audienceType: a.audience_type,
+        audienceId: a.audience_id ?? null,
+      })),
+      lessons: (row.lessons ?? []).map((l: any) => ({
+        id: l.id,
+        courseId: row.id,
+        title: l.title,
+        summary: l.summary ?? '',
+        durationSeconds: l.duration_seconds ?? 0,
+        sortOrder: l.sort_order ?? 0,
+        provider: l.video_provider ?? 'bunny',
+        bunnyVideoId: l.bunny_video_id ?? '',
+        coverUrl: l.cover_url ?? '',
+      })).sort((a: any, b: any) => a.sortOrder - b.sortOrder),
+    }))
+  }
+
   async function fetchCourses() {
     try {
       isLoading.value = true
       error.value = null
 
+      // 先嘗試含 portal_sections 欄位的查詢
       const { data, error: err } = await supabase
         .from('courses')
         .select(`
@@ -354,35 +385,23 @@ export const useCatalogStore = defineStore('catalog', () => {
         `)
         .order('created_at', { ascending: false })
 
-      if (err) throw err
+      if (err) {
+        // portal_sections 欄位尚未建立時，改用不含該欄位的查詢
+        const { data: data2, error: err2 } = await supabase
+          .from('courses')
+          .select(`
+            id, title, category_id, description, enabled, cover_url, created_at,
+            categories (name),
+            course_audiences (id, course_id, audience_type, audience_id),
+            lessons (id, title, summary, duration_seconds, cover_url, video_provider, bunny_video_id, sort_order)
+          `)
+          .order('created_at', { ascending: false })
+        if (err2) throw err2
+        courses.value = mapCourseRows(data2 ?? [])
+        return
+      }
 
-      courses.value = (data ?? []).map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        categoryId: row.category_id ?? null,
-        categoryName: row.categories?.name ?? '',
-        description: row.description ?? '',
-        enabled: row.enabled,
-        coverUrl: row.cover_url ?? '',
-        portalSections: row.portal_sections ?? [],
-        audiences: (row.course_audiences ?? []).map((a: any) => ({
-          id: a.id,
-          courseId: a.course_id,
-          audienceType: a.audience_type,
-          audienceId: a.audience_id ?? null,
-        })),
-        lessons: (row.lessons ?? []).map((l: any) => ({
-          id: l.id,
-          courseId: row.id,
-          title: l.title,
-          summary: l.summary ?? '',
-          durationSeconds: l.duration_seconds ?? 0,
-          sortOrder: l.sort_order ?? 0,
-          provider: l.video_provider ?? 'bunny',
-          bunnyVideoId: l.bunny_video_id ?? '',
-          coverUrl: l.cover_url ?? '',
-        })).sort((a: any, b: any) => a.sortOrder - b.sortOrder),
-      }))
+      courses.value = mapCourseRows(data ?? [])
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch courses'
       courses.value = []

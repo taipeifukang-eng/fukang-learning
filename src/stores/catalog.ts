@@ -244,6 +244,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         supervisor: data.supervisor ?? '',
         enabled: data.enabled,
       })
+      organizations.value.sort((a, b) => a.code.localeCompare(b.code, 'zh-TW', { numeric: true }))
     }
   }
 

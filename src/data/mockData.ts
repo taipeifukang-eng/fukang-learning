@@ -91,6 +91,7 @@ export interface Course {
   description: string
   enabled: boolean
   coverUrl: string
+  portalSections: string[]   // e.g. ['store-newcomer', 'store-general']
   audiences: CourseAudience[]
   lessons: Lesson[]
 }

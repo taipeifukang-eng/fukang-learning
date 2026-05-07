@@ -347,7 +347,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       const { data, error: err } = await supabase
         .from('courses')
         .select(`
-          id, title, category_id, description, enabled, cover_url, created_at,
+          id, title, category_id, description, enabled, cover_url, created_at, portal_sections,
           categories (name),
           course_audiences (id, course_id, audience_type, audience_id),
           lessons (id, title, summary, duration_seconds, cover_url, video_provider, bunny_video_id, sort_order)
@@ -364,6 +364,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         description: row.description ?? '',
         enabled: row.enabled,
         coverUrl: row.cover_url ?? '',
+        portalSections: row.portal_sections ?? [],
         audiences: (row.course_audiences ?? []).map((a: any) => ({
           id: a.id,
           courseId: a.course_id,
@@ -397,6 +398,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       description: course.description?.trim() ?? '',
       enabled: course.enabled ?? true,
       cover_url: course.coverUrl?.trim() ?? '',
+      portal_sections: course.portalSections ?? [],
     }
     if (course.id) {
       const { error: err } = await supabase.from('courses').update(payload).eq('id', course.id)
@@ -408,6 +410,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         target.description = payload.description
         target.enabled = payload.enabled
         target.coverUrl = payload.cover_url
+        target.portalSections = payload.portal_sections
         target.categoryName = categories.value.find((c) => c.id === payload.category_id)?.name ?? ''
       }
       return course.id
@@ -422,6 +425,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         description: data.description ?? '',
         enabled: data.enabled,
         coverUrl: data.cover_url ?? '',
+        portalSections: data.portal_sections ?? [],
         audiences: [],
         lessons: [],
       })

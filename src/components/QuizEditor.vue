@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import * as XLSX from 'xlsx'
 import type { Quiz, QuestionType } from '../data/mockData'
 import { useQuizStore } from '../stores/quiz'
 import { useAuthStore } from '../stores/auth'
@@ -123,6 +124,114 @@ function toggleMultipleCorrect(q: LocalQuestion, optIdx: number) {
 }
 
 const totalPoints = computed(() => questions.value.reduce((sum, q) => sum + q.points, 0))
+
+// ── Excel 範本下載 ────────────────────────────────────────────
+function downloadTemplate() {
+  const rows = [
+    ['題目編號', '題目內容', '題型 (single/multiple/truefalse)', '配分', '解析說明', '選項文字', '是否正確答案 (是/否)'],
+    ['Q1', '藥局收到藥品時，核對數量的首要依據是貨單與哪一份文件？', 'single', '10', '參考SOP第3頁', '富康採購單', '是'],
+    ['Q1', '', '', '', '', '富康請款單', '否'],
+    ['Q1', '', '', '', '', '出貨單', '否'],
+    ['Q1', '', '', '', '', '入貨單', '否'],
+    ['Q2', '下列哪些屬於冷藏品？（多選）', 'multiple', '10', '', '硬膠囊', '是'],
+    ['Q2', '', '', '', '', '眼藥水', '否'],
+    ['Q2', '', '', '', '', '胰島素注射劑', '是'],
+    ['Q2', '', '', '', '', '維生素C', '否'],
+    ['Q3', '藥局需要持照提供服務。', 'truefalse', '5', '', '是', '是'],
+    ['Q3', '', '', '', '', '否', '否'],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 10 }, { wch: 40 }, { wch: 28 }, { wch: 8 }, { wch: 20 }, { wch: 20 }, { wch: 24 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '測驗題目')
+  XLSX.writeFile(wb, '課後測驗範本.xlsx')
+}
+
+// ── Excel 匯入 ────────────────────────────────────────────────
+const importError = ref('')
+const importSuccess = ref('')
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importError.value = ''
+  importSuccess.value = ''
+  fileInputRef.value?.click()
+}
+
+function onFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    try {
+      const data = new Uint8Array(ev.target!.result as ArrayBuffer)
+      const wb = XLSX.read(data, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
+
+      const dataRows = rows.slice(1).filter(r => r.some(c => String(c).trim()))
+      if (dataRows.length === 0) {
+        importError.value = 'Excel 沒有資料，請使用範本格式'
+        return
+      }
+
+      const qMap = new Map<string, LocalQuestion>()
+      const qOrder: string[] = []
+
+      for (const row of dataRows) {
+        const [qno, qtext, qtype, pts, expl, optText, isCorr] = row.map(c => String(c).trim())
+        if (!qno) continue
+        const key = qno.toUpperCase()
+
+        if (!qMap.has(key)) {
+          const typeMap: Record<string, QuestionType> = {
+            single: 'single', multiple: 'multiple', truefalse: 'truefalse',
+          }
+          const resolvedType: QuestionType = typeMap[qtype?.toLowerCase()] ?? 'single'
+          qMap.set(key, {
+            id: crypto.randomUUID(),
+            sortOrder: qOrder.length,
+            questionText: qtext,
+            questionType: resolvedType,
+            points: pts ? Number(pts) : 10,
+            explanation: expl || '',
+            options: [],
+          })
+          qOrder.push(key)
+        }
+
+        if (optText) {
+          qMap.get(key)!.options.push({
+            id: crypto.randomUUID(),
+            optionText: optText,
+            isCorrect: isCorr === '是' || isCorr.toLowerCase() === 'true' || isCorr === '1',
+          })
+        }
+      }
+
+      const parsed = qOrder.map(k => qMap.get(k)!)
+      for (const q of parsed) {
+        if (!q.questionText) { importError.value = `題目 ${qOrder[parsed.indexOf(q)]} 缺少題目內容`; return }
+        if (q.options.length < 2) { importError.value = `題目「${q.questionText.slice(0, 10)}」選項數不足 2 個`; return }
+        const correctCount = q.options.filter(o => o.isCorrect).length
+        if ((q.questionType === 'single' || q.questionType === 'truefalse') && correctCount !== 1) {
+          importError.value = `題目「${q.questionText.slice(0, 10)}」單選/是非題需正好 1 個正確答案`; return
+        }
+        if (q.questionType === 'multiple' && correctCount < 1) {
+          importError.value = `題目「${q.questionText.slice(0, 10)}」多選題至少需 1 個正確答案`; return
+        }
+      }
+
+      questions.value = parsed
+      importSuccess.value = `成功匯入 ${parsed.length} 題，請確認內容後再儲存`
+    } catch {
+      importError.value = 'Excel 解析失敗，請確認檔案格式'
+    } finally {
+      if (fileInputRef.value) fileInputRef.value.value = ''
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
 
 // ── 儲存 ─────────────────────────────────────────────────────
 async function save() {
@@ -275,6 +384,15 @@ async function save() {
 
       <button class="btn-add-question" @click="addQuestion">+ 新增題目</button>
 
+      <!-- Excel 匯入區塊 -->
+      <div class="excel-import-bar">
+        <input ref="fileInputRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onFileChange" />
+        <button class="btn-excel" @click="downloadTemplate">⬇ 下載 Excel 範本</button>
+        <button class="btn-excel import" @click="triggerImport">↑ 匯入 Excel</button>
+        <span v-if="importSuccess" class="import-ok">✓ {{ importSuccess }}</span>
+        <span v-if="importError" class="import-err">⚠ {{ importError }}</span>
+      </div>
+
       <div v-if="saveError" class="error-msg">{{ saveError }}</div>
 
       <div class="editor-footer">
@@ -329,6 +447,13 @@ async function save() {
 .btn-add-opt:hover { border-color:#f59e0b; color:#b45309; }
 .btn-add-question { background:none; border:2px dashed #f59e0b; border-radius:.75rem; padding:.6rem 1.25rem; font-size:.9rem; color:#b45309; cursor:pointer; font-weight:600; }
 .btn-add-question:hover { background:#fffbeb; }
+.excel-import-bar { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding:.75rem 1rem; background:#f9fafb; border:1px solid #e5e7eb; border-radius:.65rem; }
+.btn-excel { border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:.45rem; padding:.35rem .9rem; font-size:.82rem; cursor:pointer; font-weight:500; }
+.btn-excel:hover { border-color:#f59e0b; color:#b45309; }
+.btn-excel.import { background:#f59e0b; border-color:#f59e0b; color:#fff; }
+.btn-excel.import:hover { background:#d97706; }
+.import-ok { font-size:.82rem; color:#16a34a; font-weight:600; }
+.import-err { font-size:.82rem; color:#dc2626; font-weight:600; }
 .editor-footer { display:flex; justify-content:flex-end; gap:.75rem; padding-top:.5rem; }
 .input { border:1px solid #e5e7eb; border-radius:.5rem; padding:.4rem .7rem; font-size:.9rem; width:100%; }
 .input:focus { outline:none; border-color:#f59e0b; box-shadow:0 0 0 2px rgba(245,158,11,.15); }

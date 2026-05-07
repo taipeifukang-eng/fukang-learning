@@ -15,6 +15,16 @@ const saving = ref(false)
 const saveError = ref('')
 const deleting = ref<string | null>(null)
 
+// 學習入口方塊定義（與 LearningHomeView 同步）
+const PORTAL_SECTIONS = [
+  { id: 'store-newcomer',  label: '🌱 門市－新人培訓' },
+  { id: 'store-supervisor', label: '👔 門市－主管課程' },
+  { id: 'store-general',   label: '📚 門市－通識學習' },
+  { id: 'hq-general',      label: '🏢 總部－通識學習' },
+] as const
+
+const coursePortalSections = ref<string[]>([])
+
 // ── 分類 Tab ─────────────────────────────────────────────────
 type TabId = number | 'all' | 'uncategorized'
 const activeTab = ref<TabId>('all')
@@ -100,6 +110,7 @@ function startAddCourse() {
   courseEnabled.value = true
   courseAudienceType.value = 'all'
   courseAudienceId.value = null
+  coursePortalSections.value = []
 }
 
 function startEditCourse(course: Course) {
@@ -115,6 +126,7 @@ function startEditCourse(course: Course) {
   const aud = course.audiences[0]
   courseAudienceType.value = aud?.audienceType ?? 'all'
   courseAudienceId.value = aud?.audienceId ?? null
+  coursePortalSections.value = [...(course.portalSections ?? [])]
 }
 
 function onCoverFileChange(e: Event) {
@@ -170,6 +182,7 @@ async function saveCourse() {
       description: courseDescription.value,
       coverUrl: finalCoverUrl,
       enabled: courseEnabled.value,
+      portalSections: coursePortalSections.value,
     })
     // 儲存學習對象
     if (id) {
@@ -358,6 +371,14 @@ function audienceLabel(course: Course) {
               <option v-for="cat in catalog.categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </label>
+          <div class="form-label">學習入口方塊（可彈選多個）
+            <div class="portal-section-checks">
+              <label v-for="s in PORTAL_SECTIONS" :key="s.id" class="section-check">
+                <input type="checkbox" :value="s.id" v-model="coursePortalSections" />
+                {{ s.label }}
+              </label>
+            </div>
+          </div>
           <label class="form-label">說明
             <textarea v-model="courseDescription" class="form-input" rows="3" />
           </label>
@@ -427,6 +448,14 @@ function audienceLabel(course: Course) {
               <option v-for="cat in catalog.categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </label>
+          <div class="form-label">學習入口方塊（可彈選多個）
+            <div class="portal-section-checks">
+              <label v-for="s in PORTAL_SECTIONS" :key="s.id" class="section-check">
+                <input type="checkbox" :value="s.id" v-model="coursePortalSections" />
+                {{ s.label }}
+              </label>
+            </div>
+          </div>
           <label class="form-label">說明
             <textarea v-model="courseDescription" class="form-input" rows="3" />
           </label>
@@ -554,4 +583,26 @@ function audienceLabel(course: Course) {
   text-decoration: none;
 }
 .hint-link:hover { text-decoration: underline; }
+
+.portal-section-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem .75rem;
+  margin-top: .35rem;
+}
+.section-check {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .85rem;
+  color: #d1d5db;
+  cursor: pointer;
+  padding: .3rem .6rem;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: .4rem;
+  background: rgba(255,255,255,.05);
+  transition: background .15s, border-color .15s;
+}
+.section-check:hover { background: rgba(255,255,255,.1); }
+.section-check input { accent-color: #f59e0b; cursor: pointer; }
 </style>

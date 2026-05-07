@@ -15,6 +15,7 @@ const shortName = ref('')
 const supervisor = ref('')
 const type = ref<OrgType>('store')
 const saving = ref(false)
+const saveError = ref('')
 
 const canEdit = computed(() => auth.hasPermission('orgs:edit'))
 const deleting = ref<number | null>(null)
@@ -54,6 +55,7 @@ function startEdit(id: number) {
 
 async function submitOrganization() {
   saving.value = true
+  saveError.value = ''
   try {
     await catalog.upsertOrganization({
       id: editingId.value ?? undefined,
@@ -64,7 +66,11 @@ async function submitOrganization() {
     })
     resetForm()
   } catch (error) {
-    catalog.error = error instanceof Error ? error.message : String(error)
+    const msg = error instanceof Error ? error.message : String(error)
+    saveError.value = msg.includes('unique') || msg.includes('duplicate')
+      ? `代號「${code.value}」已存在同名限制，請改用不同代號，或到 Supabase 執行 patch_org_allow_dup_code.sql 取消唯一限制。`
+      : msg
+    catalog.error = saveError.value
   } finally {
     saving.value = false
   }
@@ -141,6 +147,7 @@ onMounted(async () => {
           </button>
           <button v-if="editingId" class="table-action" type="button" @click="resetForm">取消</button>
         </div>
+        <p v-if="saveError" style="color:#f87171;font-size:.82rem;margin-top:.25rem">{{ saveError }}</p>
       </form>
 
       <div class="data-table-wrap">

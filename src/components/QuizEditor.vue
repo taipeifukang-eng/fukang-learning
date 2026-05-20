@@ -125,26 +125,72 @@ function toggleMultipleCorrect(q: LocalQuestion, optIdx: number) {
 
 const totalPoints = computed(() => questions.value.reduce((sum, q) => sum + q.points, 0))
 
-// ── Excel 範本下載 ────────────────────────────────────────────
+// ── Excel 範本下載（簡易格式：A欄=題目含選項, B欄=答案） ───────
 function downloadTemplate() {
   const rows = [
-    ['題目編號', '題目內容', '題型 (single/multiple/truefalse)', '配分', '解析說明', '選項文字', '是否正確答案 (是/否)'],
-    ['Q1', '藥局收到藥品時，核對數量的首要依據是貨單與哪一份文件？', 'single', '10', '參考SOP第3頁', '富康採購單', '是'],
-    ['Q1', '', '', '', '', '富康請款單', '否'],
-    ['Q1', '', '', '', '', '出貨單', '否'],
-    ['Q1', '', '', '', '', '入貨單', '否'],
-    ['Q2', '下列哪些屬於冷藏品？（多選）', 'multiple', '10', '', '硬膠囊', '是'],
-    ['Q2', '', '', '', '', '眼藥水', '否'],
-    ['Q2', '', '', '', '', '胰島素注射劑', '是'],
-    ['Q2', '', '', '', '', '維生素C', '否'],
-    ['Q3', '藥局需要持照提供服務。', 'truefalse', '5', '', '是', '是'],
-    ['Q3', '', '', '', '', '否', '否'],
+    ['題目（含選項，格式：題目文字(A)選項1(B)選項2(C)選項3(D)選項4）', '正確答案（例：(B) 店長或負責藥師）'],
+    ['管制藥品電子簿冊系統中，哪些角色通常擁有「年度總表」內的完整操作權限？(A) 實習藥師與助理(B) 店長或負責藥師(C) 僅限吳經理(D) 所有在職員工', '(B) 店長或負責藥師'],
+    ['在年度總表中，「產生申報檔」功能的主要用途是什麼？(A) 產生年度結存申報所需的CMIS上傳批次檔(B) 下載門市全年度的新資報表(C) 產生每日藥品銷售清單(D) 匯出給供應商的訂購單', '(A) 產生年度結存申報所需的CMIS上傳批次檔'],
   ]
   const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!cols'] = [{ wch: 10 }, { wch: 40 }, { wch: 28 }, { wch: 8 }, { wch: 20 }, { wch: 20 }, { wch: 24 }]
+  ws['!cols'] = [{ wch: 80 }, { wch: 30 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '測驗題目')
-  XLSX.writeFile(wb, '課後測驗範本.xlsx')
+  XLSX.writeFile(wb, '課後測驗範本（簡易格式）.xlsx')
+}
+
+// ── 解析簡易格式（A欄=題目含選項, B欄=答案） ───────────────
+function parseSimpleFormat(rows: string[][]): LocalQuestion[] | null {
+  // 偵測：第一欄包含 (A)...(B)... 格式
+  const dataRows = rows.filter(r => String(r[0] ?? '').includes('(A)') && String(r[0] ?? '').includes('(B)'))
+  if (dataRows.length === 0) return null
+
+  const result: LocalQuestion[] = []
+  for (const row of dataRows) {
+    const raw = String(row[0] ?? '').trim()
+    const answerRaw = String(row[1] ?? '').trim()
+    if (!raw) continue
+
+    // 分割題目和選項：在 (A)(B)(C)(D)(E) 位置切割
+    const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F']
+    // 建立正則，找到第一個 (A) 的位置
+    const firstOptMatch = raw.match(/\(A\)/)
+    if (!firstOptMatch) continue
+
+    const firstOptIdx = raw.indexOf('(A)')
+    const questionText = raw.slice(0, firstOptIdx).trim()
+    const optionsPart = raw.slice(firstOptIdx)
+
+    // 用正則把選項切出來：(A)文字(B)文字...
+    const optionRegex = /\(([A-F])\)(.*?)(?=\([A-F]\)|$)/gs
+    const options: { label: string; text: string }[] = []
+    let m
+    const regex = new RegExp(/\(([A-F])\)(.*?)(?=\([A-F]\)|$)/gs)
+    while ((m = regex.exec(optionsPart)) !== null) {
+      options.push({ label: m[1], text: m[2].trim() })
+    }
+
+    if (options.length < 2) continue
+
+    // 解析正確答案：取括號內的字母，例如 "(B) 店長..." → "B"
+    const answerLabelMatch = answerRaw.match(/\(([A-F])\)/)
+    const answerLabel = answerLabelMatch ? answerLabelMatch[1] : ''
+
+    result.push({
+      id: crypto.randomUUID(),
+      sortOrder: result.length,
+      questionText,
+      questionType: 'single',
+      points: 10,
+      explanation: '',
+      options: options.map(opt => ({
+        id: crypto.randomUUID(),
+        optionText: `(${opt.label}) ${opt.text}`,
+        isCorrect: opt.label === answerLabel,
+      })),
+    })
+  }
+  return result.length > 0 ? result : null
 }
 
 // ── Excel 匯入 ────────────────────────────────────────────────
@@ -169,6 +215,15 @@ function onFileChange(e: Event) {
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][]
 
+      // 先嘗試簡易格式（A欄=題目含選項, B欄=答案）
+      const simpleResult = parseSimpleFormat(rows)
+      if (simpleResult) {
+        questions.value = simpleResult
+        importSuccess.value = `成功匯入 ${simpleResult.length} 題，請確認內容後再儲存`
+        return
+      }
+
+      // 舊格式（標題行模式）
       const dataRows = rows.slice(1).filter(r => r.some(c => String(c).trim()))
       if (dataRows.length === 0) {
         importError.value = 'Excel 沒有資料，請使用範本格式'

@@ -178,16 +178,19 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (error || !data) return
 
-    const roles = (data.user_roles as any[]).map((ur: any) => ({
-      id: ur.roles.id,
-      key: ur.roles.key,
-      title: ur.roles.title,
-    }))
+    const roles = (data.user_roles as any[])
+      .filter((ur: any) => ur.roles != null)
+      .map((ur: any) => ({
+        id: ur.roles.id,
+        key: ur.roles.key,
+        title: ur.roles.title,
+      }))
 
     const permissionsSet = new Set<string>()
     ;(data.user_roles as any[]).forEach((ur: any) => {
+      if (!ur.roles) return
       ;(ur.roles.role_permissions as any[]).forEach((rp: any) => {
-        permissionsSet.add(rp.permissions.key)
+        if (rp.permissions?.key) permissionsSet.add(rp.permissions.key)
       })
     })
 
@@ -233,20 +236,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Init：app 啟動時恢復 session ──────────────────────────────────
   async function init() {
-    // 正確的 Supabase v2 做法：
-    // - 先掛 onAuthStateChange，讓 INITIAL_SESSION 事件還原 localStorage 裡的 session
-    // - callback 直接使用傳入的 newSession 參數，絕對不在 callback 內呼叫 getSession()
-    //   （在 callback 內呼叫 getSession() 會造成 deadlock → 白畫面）
-    // - 回傳 Promise，等 INITIAL_SESSION 處理完才讓 app.mount 執行
-    //   （確保 router guard 判斷時 isAuthenticated 已正確設定）
     return new Promise<void>((resolve) => {
+      // 安全逾時：若 INITIAL_SESSION 超過 5 秒未觸發，強制讓 app 繼續掛載
+      const timer = setTimeout(() => resolve(), 5000)
+
       supabase.auth.onAuthStateChange(async (event, newSession) => {
         if (event === 'INITIAL_SESSION') {
+          clearTimeout(timer)
           if (newSession) {
             session.value = newSession
             mockUser.value = null
             localStorage.removeItem(MOCK_STORAGE_KEY)
-            await fetchProfile(newSession)
+            // try/catch 確保任何例外都不會卡住 resolve()，app 一定會掛載
+            try { await fetchProfile(newSession) } catch { /* ignore */ }
           }
           resolve()
         } else if (newSession) {
@@ -254,7 +256,7 @@ export const useAuthStore = defineStore('auth', () => {
           mockUser.value = null
           localStorage.removeItem(MOCK_STORAGE_KEY)
           if (!profile.value || profile.value.id !== newSession.user.id) {
-            await fetchProfile(newSession)
+            try { await fetchProfile(newSession) } catch { /* ignore */ }
           }
         } else if (event === 'SIGNED_OUT') {
           session.value = null

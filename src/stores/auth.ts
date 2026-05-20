@@ -228,6 +228,23 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Init：app 啟動時恢復 session ──────────────────────────────────
   async function init() {
+    // 監聽所有 auth 事件（含 TOKEN_REFRESHED、SIGNED_IN、SIGNED_OUT）
+    supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (newSession) {
+        session.value = newSession
+        mockUser.value = null
+        localStorage.removeItem(MOCK_STORAGE_KEY)
+        // 尚未載入 profile 或換了帳號才重新 fetch
+        if (!profile.value || profile.value.id !== newSession.user.id) {
+          await fetchProfile()
+        }
+      } else if (event === 'SIGNED_OUT') {
+        session.value = null
+        profile.value = null
+      }
+    })
+
+    // 初始載入：從 localStorage 還原 session
     const { data: { session: existing } } = await supabase.auth.getSession()
     if (existing) {
       session.value = existing

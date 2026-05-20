@@ -233,30 +233,34 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Init：app 啟動時恢復 session ──────────────────────────────────
   async function init() {
-    // 1. 啟動時先用 getSession() 還原 session（此時 onAuthStateChange 尚未監聽，不會 deadlock）
-    const { data: { session: existing } } = await supabase.auth.getSession()
-    if (existing) {
-      session.value = existing
-      mockUser.value = null
-      localStorage.removeItem(MOCK_STORAGE_KEY)
-      await fetchProfile(existing)
-    }
-
-    // 2. 之後再掛 listener，只處理「後續」auth 事件（INITIAL_SESSION 已在上面處理，略過）
-    supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (event === 'INITIAL_SESSION') return // 已由 getSession() 處理
-      if (newSession) {
-        session.value = newSession
-        mockUser.value = null
-        localStorage.removeItem(MOCK_STORAGE_KEY)
-        // 帳號不同（或尚無 profile）時重新 fetch；使用 newSession 避免 deadlock
-        if (!profile.value || profile.value.id !== newSession.user.id) {
-          await fetchProfile(newSession)
+    // 正確的 Supabase v2 做法：
+    // - 先掛 onAuthStateChange，讓 INITIAL_SESSION 事件還原 localStorage 裡的 session
+    // - callback 直接使用傳入的 newSession 參數，絕對不在 callback 內呼叫 getSession()
+    //   （在 callback 內呼叫 getSession() 會造成 deadlock → 白畫面）
+    // - 回傳 Promise，等 INITIAL_SESSION 處理完才讓 app.mount 執行
+    //   （確保 router guard 判斷時 isAuthenticated 已正確設定）
+    return new Promise<void>((resolve) => {
+      supabase.auth.onAuthStateChange(async (event, newSession) => {
+        if (event === 'INITIAL_SESSION') {
+          if (newSession) {
+            session.value = newSession
+            mockUser.value = null
+            localStorage.removeItem(MOCK_STORAGE_KEY)
+            await fetchProfile(newSession)
+          }
+          resolve()
+        } else if (newSession) {
+          session.value = newSession
+          mockUser.value = null
+          localStorage.removeItem(MOCK_STORAGE_KEY)
+          if (!profile.value || profile.value.id !== newSession.user.id) {
+            await fetchProfile(newSession)
+          }
+        } else if (event === 'SIGNED_OUT') {
+          session.value = null
+          profile.value = null
         }
-      } else if (event === 'SIGNED_OUT') {
-        session.value = null
-        profile.value = null
-      }
+      })
     })
   }
 

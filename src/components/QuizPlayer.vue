@@ -58,9 +58,10 @@ const bestAttempt = computed(() =>
 function startQuiz() {
   selected.value = new Map()
   showAnswers.value = false
+  // 每次作答將各題選項隨機打亂，防止記憶答案位置
   displayQuestions.value = props.quiz.questions.map(q => ({
     ...q,
-    options: [...q.options],
+    options: shuffleArray(q.options),
   }))
   phase.value = 'doing'
 }

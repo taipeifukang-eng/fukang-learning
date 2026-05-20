@@ -27,5 +27,5 @@ export function getBunnyEmbedUrl(videoId: string) {
     return ''
   }
 
-  return `https://${appConfig.bunnyCdnHost}/embed/${appConfig.bunnyLibraryId}/${videoId}?defaultQuality=720&preload=true`
+  return `https://${appConfig.bunnyCdnHost}/embed/${appConfig.bunnyLibraryId}/${videoId}?defaultQuality=720`
 }

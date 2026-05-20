@@ -199,7 +199,7 @@ export const useCatalogStore = defineStore('catalog', () => {
   async function fetchOrganizations() {
     const { data, error: err } = await supabase
       .from('organizations')
-      .select('id, code, name, short_name, type, supervisor, enabled')
+      .select('id, code, name, short_name, type, supervisor, manager, enabled')
       .order('code')
 
     if (err) {
@@ -214,6 +214,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       shortName: item.short_name ?? item.name,
       type: item.type,
       supervisor: item.supervisor ?? '',
+      manager: item.manager ?? '',
       enabled: item.enabled,
     }))
   }
@@ -227,6 +228,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       short_name: org.shortName.trim(),
       type: org.type,
       supervisor: org.supervisor?.trim() ?? '',
+      manager: org.manager?.trim() ?? '',
       enabled: org.enabled ?? true,
     }
 
@@ -245,6 +247,7 @@ export const useCatalogStore = defineStore('catalog', () => {
           shortName: payload.short_name,
           type: payload.type,
           supervisor: payload.supervisor,
+          manager: payload.manager,
           enabled: payload.enabled,
         })
       }
@@ -262,6 +265,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         shortName: data.short_name ?? data.name,
         type: data.type,
         supervisor: data.supervisor ?? '',
+        manager: data.manager ?? '',
         enabled: data.enabled,
       })
       organizations.value.sort((a, b) => a.code.localeCompare(b.code, 'zh-TW', { numeric: true }))

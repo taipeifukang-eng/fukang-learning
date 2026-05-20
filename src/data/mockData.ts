@@ -10,6 +10,7 @@ export interface Organization {
   shortName: string
   type: OrgType
   supervisor: string
+  manager: string
   enabled: boolean
 }
 

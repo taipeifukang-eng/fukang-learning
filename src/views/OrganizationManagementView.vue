@@ -9,10 +9,12 @@ const catalog = useCatalogStore()
 
 const filterType = ref<'all' | OrgType>('all')
 const filterSupervisor = ref<string>('all')
+const filterManager = ref<string>('all')
 const editingId = ref<number | null>(null)
 const code = ref('')
 const shortName = ref('')
 const supervisor = ref('')
+const manager = ref('')
 const type = ref<OrgType>('store')
 const saving = ref(false)
 const saveError = ref('')
@@ -23,10 +25,15 @@ const supervisorOptions = computed(() => {
   const names = catalog.organizations.map((o) => o.supervisor).filter(Boolean)
   return [...new Set(names)].sort()
 })
+const managerOptions = computed(() => {
+  const names = catalog.organizations.map((o) => o.manager).filter(Boolean)
+  return [...new Set(names)].sort()
+})
 const filteredOrganizations = computed(() => {
   return catalog.organizations.filter((item) => {
     if (filterType.value !== 'all' && item.type !== filterType.value) return false
     if (filterSupervisor.value !== 'all' && item.supervisor !== filterSupervisor.value) return false
+    if (filterManager.value !== 'all' && item.manager !== filterManager.value) return false
     return true
   })
 })
@@ -40,6 +47,7 @@ function resetForm() {
   code.value = ''
   shortName.value = ''
   supervisor.value = ''
+  manager.value = ''
   type.value = 'store'
 }
 
@@ -50,6 +58,7 @@ function startEdit(id: number) {
   code.value = target.code
   shortName.value = target.shortName
   supervisor.value = target.supervisor
+  manager.value = target.manager
   type.value = target.type
 }
 
@@ -62,6 +71,7 @@ async function submitOrganization() {
       code: code.value,
       shortName: shortName.value,
       supervisor: supervisor.value,
+      manager: manager.value,
       type: type.value,
     })
     resetForm()
@@ -120,6 +130,10 @@ onMounted(async () => {
           <option value="all">全部督導/副理</option>
           <option v-for="name in supervisorOptions" :key="name" :value="name">{{ name }}</option>
         </select>
+        <select v-model="filterManager" class="filter-select">
+          <option value="all">全部經理</option>
+          <option v-for="name in managerOptions" :key="name" :value="name">{{ name }}</option>
+        </select>
         <span class="filter-count">共 {{ filteredOrganizations.length }} 筆組織</span>
       </div>
     </section>
@@ -146,6 +160,10 @@ onMounted(async () => {
           <span>督導/副理</span>
           <input v-model="supervisor" class="text-input" maxlength="20" placeholder="請輸入督導/副理姓名" :disabled="!canEdit" />
         </label>
+        <label>
+          <span>經理</span>
+          <input v-model="manager" class="text-input" maxlength="20" placeholder="請輸入經理姓名" :disabled="!canEdit" />
+        </label>
 
         <div class="form-actions">
           <button class="table-action is-primary" type="submit" :disabled="!canEdit || saving">
@@ -164,6 +182,7 @@ onMounted(async () => {
               <th>門市 / 總部</th>
               <th>門市 / 部門簡稱</th>
               <th>督導/副理</th>
+              <th>經理</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -173,6 +192,7 @@ onMounted(async () => {
               <td>{{ typeLabel(organization.type) }}</td>
               <td>{{ organization.shortName }}</td>
               <td>{{ organization.supervisor || '—' }}</td>
+              <td>{{ organization.manager || '—' }}</td>
               <td class="action-cell">
                 <button class="table-action" type="button" :disabled="!canEdit" @click="startEdit(organization.id)">
                   編輯
@@ -188,7 +208,7 @@ onMounted(async () => {
               </td>
             </tr>
             <tr v-if="filteredOrganizations.length === 0">
-              <td colspan="5" class="empty-row">目前沒有組織資料</td>
+              <td colspan="6" class="empty-row">目前沒有組織資料</td>
             </tr>
           </tbody>
         </table>

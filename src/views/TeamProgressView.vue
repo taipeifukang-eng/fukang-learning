@@ -34,12 +34,17 @@ const managedOrgIds = computed<number[]>(() => {
 
   const ids = new Set<number>()
 
-  // 1. 督導：在組織管理中登記為 supervisor 的組織（以 display name 比對）
+  // 1. 經理：門市登記 manager 中有自己名字的所有組織
+  catalog.organizations.forEach((org) => {
+    if (org.manager && org.manager === user.name) ids.add(org.id)
+  })
+
+  // 2. 督導：在組織管理中登記為 supervisor 的組織（以 display name 比對）
   catalog.organizations.forEach((org) => {
     if (org.supervisor && org.supervisor === user.name) ids.add(org.id)
   })
 
-  // 2. 明確指派：staff_manager_org_scope
+  // 3. 明確指派：staff_manager_org_scope
   catalog.managerOrgScopes.forEach((scope) => {
     if (scope.managerId === user.id && scope.active) ids.add(scope.orgId)
   })
@@ -127,6 +132,7 @@ function orgStaffCount(orgId: number) {
             <strong class="org-name">{{ org.code }}｜{{ org.shortName }}</strong>
             <span class="org-meta">
               {{ org.type === 'store' ? '門市' : '總部 / 部門' }}
+              <template v-if="org.manager">・經理：{{ org.manager }}</template>
               <template v-if="org.supervisor">・督導/副理：{{ org.supervisor }}</template>
             </span>
           </div>

@@ -235,8 +235,8 @@ onMounted(async () => {
   width: 100%;
   padding: 0.7rem 0.85rem;
   border-radius: 10px;
-  border: 1px solid var(--color-border, #473729);
-  background: var(--color-surface, #1f1711);
+  border: 1px solid var(--color-border, #d1ccc7);
+  background: var(--color-surface, transparent);
   color: inherit;
 }
 

@@ -125,6 +125,17 @@ function toggleMultipleCorrect(q: LocalQuestion, optIdx: number) {
 
 const totalPoints = computed(() => questions.value.reduce((sum, q) => sum + q.points, 0))
 
+// ── 均分設定 ─────────────────────────────────────────────────
+function distributePoints() {
+  const n = questions.value.length
+  if (n === 0) return
+  const base = Math.floor(100 / n)
+  const remainder = 100 - base * n
+  questions.value.forEach((q, i) => {
+    q.points = base + (i < remainder ? 1 : 0)
+  })
+}
+
 // ── Excel 範本下載（簡易格式：A欄=題目含選項, B欄=答案） ───────
 function downloadTemplate() {
   const rows = [
@@ -360,7 +371,10 @@ async function save() {
           <label>通過分數（滿分 100）</label>
           <input v-model.number="passScore" type="number" min="1" max="100" class="input input-sm" />
         </div>
-        <div class="total-points">題目總分：<strong>{{ totalPoints }}</strong> 分</div>
+        <div class="total-points">
+          題目總分：<strong :style="{ color: totalPoints === 100 ? '#16a34a' : '#b45309' }">{{ totalPoints }}</strong> 分
+          <button class="btn-distribute" :disabled="questions.length === 0" @click="distributePoints" title="依題數均分，合計 100 分">⚖ 均分（100分）</button>
+        </div>
       </div>
 
       <!-- 題目列表 -->
@@ -470,7 +484,10 @@ async function save() {
 .section-card h3 { margin:0; font-size:.95rem; font-weight:600; color:#374151; }
 .form-row { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
 .form-row label { font-size:.85rem; color:#6b7280; min-width:140px; }
-.total-points { font-size:.85rem; color:#6b7280; }
+.total-points { font-size:.85rem; color:#6b7280; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.btn-distribute { font-size:.8rem; padding:.25rem .65rem; border-radius:.4rem; border:1px solid #b45309; color:#b45309; background:transparent; cursor:pointer; white-space:nowrap; }
+.btn-distribute:hover:not(:disabled) { background:#fef3c7; }
+.btn-distribute:disabled { opacity:.4; cursor:not-allowed; }
 .question-header { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
 .q-index { font-size:.85rem; font-weight:700; color:#b45309; min-width:2rem; }
 .question-meta { display:flex; align-items:center; gap:.5rem; flex:1; }

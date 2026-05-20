@@ -69,7 +69,8 @@ const embedUrl = computed(() => {
   const base = getLessonEmbedUrl(selectedLesson.value.bunnyVideoId)
   if (!base) return ''
   // 使用固定的 startPositionSeconds，不隨 watchedHighWater 更新，避免 iframe 不斷重載
-  return startPositionSeconds.value > 5 ? `${base}?t=${startPositionSeconds.value}` : base
+  const sep = base.includes('?') ? '&' : '?'
+  return startPositionSeconds.value > 5 ? `${base}${sep}t=${startPositionSeconds.value}` : base
 })
 
 const progressPercent = computed(() => {

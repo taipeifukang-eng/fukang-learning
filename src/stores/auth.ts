@@ -142,12 +142,17 @@ export const useAuthStore = defineStore('auth', () => {
     mockUser.value = null
     localStorage.removeItem(MOCK_STORAGE_KEY)
 
-    // 取得完整 profile（含角色/權限）
-    await fetchProfile()
+    // 取得完整 profile（含角色/權限），傳入 session 避免 deadlock
+    await fetchProfile(otpData.session)
   }
 
-  async function fetchProfile(): Promise<void> {
-    const { data: { session: currentSession } } = await supabase.auth.getSession()
+  async function fetchProfile(sessionArg?: Session): Promise<void> {
+    // 優先使用傳入的 session，避免在 onAuthStateChange callback 內再呼叫 getSession（會造成 deadlock）
+    let currentSession = sessionArg ?? null
+    if (!currentSession) {
+      const { data } = await supabase.auth.getSession()
+      currentSession = data.session
+    }
     if (!currentSession) return
 
     session.value = currentSession
@@ -228,30 +233,31 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Init：app 啟動時恢復 session ──────────────────────────────────
   async function init() {
-    // 監聽所有 auth 事件（含 TOKEN_REFRESHED、SIGNED_IN、SIGNED_OUT）
+    // 1. 啟動時先用 getSession() 還原 session（此時 onAuthStateChange 尚未監聽，不會 deadlock）
+    const { data: { session: existing } } = await supabase.auth.getSession()
+    if (existing) {
+      session.value = existing
+      mockUser.value = null
+      localStorage.removeItem(MOCK_STORAGE_KEY)
+      await fetchProfile(existing)
+    }
+
+    // 2. 之後再掛 listener，只處理「後續」auth 事件（INITIAL_SESSION 已在上面處理，略過）
     supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (event === 'INITIAL_SESSION') return // 已由 getSession() 處理
       if (newSession) {
         session.value = newSession
         mockUser.value = null
         localStorage.removeItem(MOCK_STORAGE_KEY)
-        // 尚未載入 profile 或換了帳號才重新 fetch
+        // 帳號不同（或尚無 profile）時重新 fetch；使用 newSession 避免 deadlock
         if (!profile.value || profile.value.id !== newSession.user.id) {
-          await fetchProfile()
+          await fetchProfile(newSession)
         }
       } else if (event === 'SIGNED_OUT') {
         session.value = null
         profile.value = null
       }
     })
-
-    // 初始載入：從 localStorage 還原 session
-    const { data: { session: existing } } = await supabase.auth.getSession()
-    if (existing) {
-      session.value = existing
-      mockUser.value = null
-      localStorage.removeItem(MOCK_STORAGE_KEY)
-      await fetchProfile()
-    }
   }
 
   return {

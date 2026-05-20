@@ -127,7 +127,7 @@ function orgStaffCount(orgId: number) {
             <strong class="org-name">{{ org.code }}｜{{ org.shortName }}</strong>
             <span class="org-meta">
               {{ org.type === 'store' ? '門市' : '總部 / 部門' }}
-              <template v-if="org.supervisor">・督導：{{ org.supervisor }}</template>
+              <template v-if="org.supervisor">・督導/副理：{{ org.supervisor }}</template>
             </span>
           </div>
         </div>

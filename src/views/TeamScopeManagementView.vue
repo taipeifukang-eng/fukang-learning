@@ -143,7 +143,7 @@ onMounted(async () => {
 
           <!-- 督導自動管轄（唯讀提示） -->
           <div v-if="supervisorOrgs.length > 0" class="supervisor-orgs">
-            <p class="section-label">🔒 督導自動管轄（來自組織管理設定，無需手動勾選）</p>
+            <p class="section-label">🔒 督導/副理自動管轄（來自組織管理設定，無需手動勾選）</p>
             <div v-for="org in supervisorOrgs" :key="org.id" class="org-chip supervisor">
               {{ org.code }}｜{{ org.shortName }}
             </div>
@@ -171,7 +171,7 @@ onMounted(async () => {
               <span class="org-info">
                 <strong>{{ org.code }}｜{{ org.shortName }}</strong>
                 <small>{{ org.type === 'store' ? '門市' : '總部 / 部門' }}
-                  <template v-if="org.supervisor"> · 督導：{{ org.supervisor }}</template>
+                  <template v-if="org.supervisor"> · 督導/副理：{{ org.supervisor }}</template>
                 </small>
               </span>
               <span class="org-count">

@@ -117,7 +117,7 @@ onMounted(async () => {
           <option value="store">門市</option>
         </select>
         <select v-model="filterSupervisor" class="filter-select">
-          <option value="all">全部督導</option>
+          <option value="all">全部督導/副理</option>
           <option v-for="name in supervisorOptions" :key="name" :value="name">{{ name }}</option>
         </select>
         <span class="filter-count">共 {{ filteredOrganizations.length }} 筆組織</span>
@@ -143,8 +143,8 @@ onMounted(async () => {
           <input v-model="shortName" class="text-input" maxlength="40" :disabled="!canEdit" required />
         </label>
         <label>
-          <span>督導</span>
-          <input v-model="supervisor" class="text-input" maxlength="20" placeholder="請輸入督導姓名" :disabled="!canEdit" />
+          <span>督導/副理</span>
+          <input v-model="supervisor" class="text-input" maxlength="20" placeholder="請輸入督導/副理姓名" :disabled="!canEdit" />
         </label>
 
         <div class="form-actions">
@@ -163,7 +163,7 @@ onMounted(async () => {
               <th>門市代號</th>
               <th>門市 / 總部</th>
               <th>門市 / 部門簡稱</th>
-              <th>督導</th>
+              <th>督導/副理</th>
               <th>操作</th>
             </tr>
           </thead>

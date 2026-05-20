@@ -89,7 +89,7 @@ onMounted(async () => {
       </div>
       <div class="filter-bar">
         <select v-model="filterSupervisor" class="filter-select">
-          <option value="all">全部督導</option>
+          <option value="all">全部督導/副理</option>
           <option v-for="name in supervisorOptions" :key="name" :value="name">{{ name }}</option>
         </select>
         <span class="filter-count">顯示 {{ visibleOrganizations.length }} 個組織</span>

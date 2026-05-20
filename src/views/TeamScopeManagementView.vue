@@ -5,11 +5,11 @@ import { useCatalogStore } from '../stores/catalog'
 const catalog = useCatalogStore()
 
 const selectedManagerId = ref('')
-const selectedOrgFilters = ref<string[]>([])
-const selectedMemberIds = ref<string[]>([])
+const selectedOrgIds = ref<number[]>([])   // 已勾選的組織 ID（寫入 staff_manager_org_scope）
 const saving = ref(false)
 const saveMessage = ref('')
 
+// ── 主管選項：有 team_progress:view 權限且啟用中的人員 ──────────
 function hasTeamProgressPermission(member: { roles: Array<{ key: string }> }) {
   return member.roles.some((role) =>
     catalog.roles.find((roleDef) => roleDef.key === role.key)?.permissions.includes('team_progress:view'),
@@ -18,103 +18,54 @@ function hasTeamProgressPermission(member: { roles: Array<{ key: string }> }) {
 
 const managerOptions = computed(() =>
   catalog.staff
-    .filter((member) => member.enabled)
-    .filter((member) => hasTeamProgressPermission(member))
+    .filter((m) => m.enabled)
+    .filter((m) => hasTeamProgressPermission(m))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')),
 )
 
 const selectedManager = computed(() =>
-  managerOptions.value.find((member) => member.id === selectedManagerId.value) ?? null,
+  managerOptions.value.find((m) => m.id === selectedManagerId.value) ?? null,
 )
 
-const scopeCountByManager = computed(() => {
+// ── 每位主管的管轄組織數量（for 左側清單顯示）──────────────────
+const orgCountByManager = computed(() => {
   const map = new Map<string, number>()
-  catalog.managerScopes.forEach((scope) => {
-    if (!scope.active) return
-    map.set(scope.managerId, (map.get(scope.managerId) ?? 0) + 1)
+  catalog.managerOrgScopes.forEach((s) => {
+    if (!s.active) return
+    map.set(s.managerId, (map.get(s.managerId) ?? 0) + 1)
   })
   return map
 })
 
-const orgFilterOptions = computed(() =>
-  catalog.organizations.map((org) => ({ value: String(org.id), label: `${org.code}｜${org.shortName}` })),
-)
-
-const memberCandidates = computed(() =>
-  catalog.staff
-    .filter((member) => member.enabled)
-    .filter((member) => member.id !== selectedManagerId.value)
-    .filter((member) => {
-      if (selectedOrgFilters.value.length === 0) return true
-      return selectedOrgFilters.value.includes(String(member.orgId ?? ''))
-    })
-    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')),
-)
-
-const selectedOrgLabel = computed(() => {
-  if (selectedOrgFilters.value.length === 0) return '全部門市 / 部門'
-  const names = selectedOrgFilters.value
-    .map((id) => catalog.organizations.find((org) => String(org.id) === id)?.shortName)
-    .filter(Boolean)
-  return names.join('、')
+// ── 此主管因督導設定自動擁有的組織 ──────────────────────────────
+const supervisorOrgs = computed(() => {
+  if (!selectedManager.value) return []
+  const name = selectedManager.value.name
+  return catalog.organizations.filter((org) => org.supervisor === name)
 })
 
-const selectedManagerScopes = computed(() =>
-  catalog.managerScopes.filter((scope) => scope.managerId === selectedManagerId.value && scope.active),
+// ── 此主管在 org_scope 中明確指派的組織 ID ───────────────────────
+const currentManagerOrgScopes = computed(() =>
+  catalog.managerOrgScopes.filter((s) => s.managerId === selectedManagerId.value && s.active),
 )
 
-watch(selectedManagerId, (managerId) => {
+// 當切換主管時，重新載入已指派的組織
+watch(selectedManagerId, () => {
   saveMessage.value = ''
-  if (!managerId) {
-    selectedMemberIds.value = []
-    return
-  }
-  selectedMemberIds.value = selectedManagerScopes.value.map((scope) => scope.memberId)
+  selectedOrgIds.value = currentManagerOrgScopes.value.map((s) => s.orgId)
 })
 
-watch(
-  selectedManagerScopes,
-  (scopes) => {
-    if (!selectedManagerId.value) return
-    selectedMemberIds.value = scopes.map((scope) => scope.memberId)
-  },
-  { deep: true },
-)
+watch(currentManagerOrgScopes, (scopes) => {
+  if (!selectedManagerId.value) return
+  selectedOrgIds.value = scopes.map((s) => s.orgId)
+}, { deep: true })
 
-function toggleMember(memberId: string) {
-  if (selectedMemberIds.value.includes(memberId)) {
-    selectedMemberIds.value = selectedMemberIds.value.filter((id) => id !== memberId)
-    return
+function toggleOrg(orgId: number) {
+  if (selectedOrgIds.value.includes(orgId)) {
+    selectedOrgIds.value = selectedOrgIds.value.filter((id) => id !== orgId)
+  } else {
+    selectedOrgIds.value = [...selectedOrgIds.value, orgId]
   }
-  selectedMemberIds.value = [...selectedMemberIds.value, memberId]
-}
-
-function isSelected(memberId: string) {
-  return selectedMemberIds.value.includes(memberId)
-}
-
-function selectAllVisible() {
-  const visibleIds = memberCandidates.value.map((member) => member.id)
-  selectedMemberIds.value = Array.from(new Set([...selectedMemberIds.value, ...visibleIds]))
-}
-
-function clearAllVisible() {
-  const visibleIds = new Set(memberCandidates.value.map((member) => member.id))
-  selectedMemberIds.value = selectedMemberIds.value.filter((id) => !visibleIds.has(id))
-}
-
-function addAllFromSelectedOrganizations() {
-  if (selectedOrgFilters.value.length === 0) return
-  const ids = catalog.staff
-    .filter((member) => member.enabled)
-    .filter((member) => member.id !== selectedManagerId.value)
-    .filter((member) => selectedOrgFilters.value.includes(String(member.orgId ?? '')))
-    .map((member) => member.id)
-  selectedMemberIds.value = Array.from(new Set([...selectedMemberIds.value, ...ids]))
-}
-
-function clearOrganizationFilters() {
-  selectedOrgFilters.value = []
 }
 
 async function saveScope() {
@@ -122,8 +73,8 @@ async function saveScope() {
   saving.value = true
   saveMessage.value = ''
   try {
-    await catalog.replaceManagerScope(selectedManagerId.value, selectedMemberIds.value)
-    saveMessage.value = '已儲存主管轄下範圍。'
+    await catalog.replaceManagerOrgScope(selectedManagerId.value, selectedOrgIds.value)
+    saveMessage.value = '✓ 已儲存組織管轄範圍。'
   } catch (err) {
     saveMessage.value = err instanceof Error ? err.message : '儲存失敗'
   } finally {
@@ -134,7 +85,7 @@ async function saveScope() {
 onMounted(async () => {
   await catalog.fetchOrganizations()
   await catalog.fetchStaff()
-  await catalog.fetchManagerScopes()
+  await catalog.fetchManagerOrgScopes()
   if (managerOptions.value.length > 0) {
     selectedManagerId.value = managerOptions.value[0].id
   }
@@ -145,10 +96,15 @@ onMounted(async () => {
   <div class="page-stack">
     <section class="panel-card">
       <h2>主管範圍管理</h2>
-      <p>設定店長 / 督導 / 主管可查看哪些人員的學習進度（對應資料表：staff_manager_scope）。</p>
+      <p>
+        設定各主管（店長 / 督導）管轄哪些門市 / 部門。<br>
+        勾選組織後，該組織下的所有人員都會自動納入此主管的管理範圍，無需逐一設定。<br>
+        <em>督導若已在「組織管理」設定為某門市的督導，系統也會自動包含該門市。</em>
+      </p>
     </section>
 
     <section class="panel-grid panel-grid--2">
+      <!-- 左側：主管清單 -->
       <article class="panel-card">
         <h3>主管清單</h3>
         <p class="muted-text">只顯示「具有 team_progress:view 權限」且啟用中的人員。</p>
@@ -166,56 +122,69 @@ onMounted(async () => {
               <strong>{{ manager.name }}</strong>
               <p>{{ manager.employeeNo || '未填員編' }}｜{{ manager.orgShortName || '未編制組織' }}</p>
             </div>
-            <span>{{ scopeCountByManager.get(manager.id) ?? 0 }} 人</span>
+            <span class="scope-badge">{{ orgCountByManager.get(manager.id) ?? 0 }} 間</span>
           </button>
         </div>
       </article>
 
+      <!-- 右側：組織指派 -->
       <article class="panel-card">
-        <h3>轄下人員指派</h3>
+        <h3>管轄組織指派</h3>
 
         <template v-if="!selectedManager">
           <p class="muted-text">請先從左側選擇主管。</p>
         </template>
 
         <template v-else>
-          <p>
-            目前主管：
-            <strong>{{ selectedManager.name }}</strong>
+          <p class="manager-title">
+            目前主管：<strong>{{ selectedManager.name }}</strong>
             （{{ selectedManager.employeeNo || '未填員編' }}）
           </p>
 
-          <div class="actions">
-            <select v-model="selectedOrgFilters" class="filter-select" multiple size="5">
-              <option v-for="opt in orgFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-            <button class="table-action" type="button" @click="selectAllVisible">全選目前篩選</button>
-            <button class="table-action" type="button" @click="clearAllVisible">清除目前篩選</button>
-            <button class="table-action" type="button" :disabled="selectedOrgFilters.length === 0" @click="addAllFromSelectedOrganizations">
-              加入所選門市全部人員
-            </button>
-            <button class="table-action" type="button" @click="clearOrganizationFilters">清空門市篩選</button>
+          <!-- 督導自動管轄（唯讀提示） -->
+          <div v-if="supervisorOrgs.length > 0" class="supervisor-orgs">
+            <p class="section-label">🔒 督導自動管轄（來自組織管理設定，無需手動勾選）</p>
+            <div v-for="org in supervisorOrgs" :key="org.id" class="org-chip supervisor">
+              {{ org.code }}｜{{ org.shortName }}
+            </div>
           </div>
 
-          <div class="muted-text">
-            目前門市篩選：{{ selectedOrgLabel }}
-          </div>
+          <!-- 明確指派的組織（可勾選） -->
+          <p class="section-label" style="margin-top:.75rem">✏️ 手動指派管轄組織</p>
+          <p class="muted-text" style="font-size:.82rem;margin-bottom:.5rem">
+            勾選後，該組織所有啟用人員皆納入此主管的轄區進度。
+          </p>
 
-          <div class="member-list">
-            <label v-for="member in memberCandidates" :key="member.id" class="member-item">
-              <input :checked="isSelected(member.id)" type="checkbox" @change="toggleMember(member.id)" />
-              <span>
-                <strong>{{ member.name }}</strong>
-                <small>{{ member.employeeNo || '未填員編' }}｜{{ member.orgShortName || '未編制組織' }}</small>
+          <div class="org-list">
+            <label
+              v-for="org in catalog.organizations"
+              :key="org.id"
+              class="org-item"
+              :class="{ 'is-checked': selectedOrgIds.includes(org.id), 'is-supervisor': supervisorOrgs.some(s => s.id === org.id) }"
+            >
+              <input
+                :checked="selectedOrgIds.includes(org.id)"
+                :disabled="supervisorOrgs.some(s => s.id === org.id)"
+                type="checkbox"
+                @change="toggleOrg(org.id)"
+              />
+              <span class="org-info">
+                <strong>{{ org.code }}｜{{ org.shortName }}</strong>
+                <small>{{ org.type === 'store' ? '門市' : '總部 / 部門' }}
+                  <template v-if="org.supervisor"> · 督導：{{ org.supervisor }}</template>
+                </small>
+              </span>
+              <span class="org-count">
+                {{ catalog.staff.filter(m => m.enabled && m.orgId === org.id).length }} 人
               </span>
             </label>
           </div>
 
-          <div class="actions">
+          <div class="save-row">
             <button class="btn btn--primary" type="button" :disabled="saving" @click="saveScope">
-              {{ saving ? '儲存中...' : '儲存主管範圍' }}
+              {{ saving ? '儲存中...' : '儲存管轄範圍' }}
             </button>
-            <span v-if="saveMessage" class="muted-text">{{ saveMessage }}</span>
+            <span v-if="saveMessage" class="save-msg">{{ saveMessage }}</span>
           </div>
         </template>
       </article>
@@ -227,7 +196,7 @@ onMounted(async () => {
 .manager-list {
   display: grid;
   gap: 0.5rem;
-  max-height: 420px;
+  max-height: 460px;
   overflow: auto;
 }
 
@@ -243,6 +212,7 @@ onMounted(async () => {
   color: inherit;
   padding: 0.65rem 0.75rem;
   cursor: pointer;
+  gap: .5rem;
 }
 
 .manager-item.is-active {
@@ -256,36 +226,95 @@ onMounted(async () => {
   font-size: 0.82rem;
 }
 
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 0.75rem 0;
+.scope-badge {
+  font-size: .8rem;
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 20%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.member-list {
+.manager-title { margin-bottom: .75rem; }
+
+.section-label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0 0 .35rem;
+}
+
+.supervisor-orgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: .5rem;
+  padding: .6rem;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 8%, transparent);
+  border-radius: 8px;
+}
+
+.org-chip {
+  font-size: .8rem;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 22%, transparent);
+}
+
+.org-list {
   display: grid;
-  gap: 0.5rem;
-  max-height: 320px;
+  gap: .45rem;
+  max-height: 340px;
   overflow: auto;
   border-top: 1px solid var(--color-border, #4b3a2f);
   border-bottom: 1px solid var(--color-border, #4b3a2f);
-  padding: 0.75rem 0;
+  padding: .6rem 0;
 }
 
-.member-item {
+.org-item {
   display: flex;
-  gap: 0.6rem;
   align-items: center;
+  gap: .6rem;
+  padding: .5rem .6rem;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.member-item span {
+.org-item.is-checked {
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 10%, transparent);
+}
+
+.org-item.is-supervisor {
+  opacity: .6;
+  cursor: default;
+}
+
+.org-info {
+  flex: 1;
   display: grid;
 }
 
-.member-item small {
-  opacity: 0.7;
+.org-info small {
+  font-size: .78rem;
+  opacity: .7;
+}
+
+.org-count {
+  font-size: .8rem;
+  opacity: .65;
+  white-space: nowrap;
+}
+
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-top: .75rem;
+}
+
+.save-msg {
+  font-size: .85rem;
+  color: #16a34a;
 }
 
 @media (max-width: 960px) {

@@ -20,6 +20,15 @@ export const useCatalogStore = defineStore('catalog', () => {
     active: boolean
     createdAt: string
   }>>([])
+
+  // 以「組織」為單位的主管範圍（店長用）
+  const managerOrgScopes = ref<Array<{
+    id: number
+    managerId: string
+    orgId: number
+    active: boolean
+    createdAt: string
+  }>>([])
   const staff = ref<StaffMember[]>([])
   const organizations = ref<Organization[]>([])
   const categories = ref<Category[]>([])
@@ -289,6 +298,49 @@ export const useCatalogStore = defineStore('catalog', () => {
       active: row.active,
       createdAt: row.created_at,
     }))
+  }
+
+  // ── 以組織為單位的主管範圍（店長用） ──────────────────────
+  async function fetchManagerOrgScopes(managerId?: string) {
+    let query = supabase
+      .from('staff_manager_org_scope')
+      .select('id, manager_id, org_id, active, created_at')
+      .order('created_at', { ascending: false })
+
+    if (managerId) query = query.eq('manager_id', managerId)
+
+    const { data, error: err } = await query
+    if (err) throw err
+
+    managerOrgScopes.value = (data ?? []).map((row: any) => ({
+      id: row.id,
+      managerId: row.manager_id,
+      orgId: row.org_id,
+      active: row.active,
+      createdAt: row.created_at,
+    }))
+  }
+
+  async function replaceManagerOrgScope(managerId: string, orgIds: number[]) {
+    const { error: delErr } = await supabase
+      .from('staff_manager_org_scope')
+      .delete()
+      .eq('manager_id', managerId)
+    if (delErr) throw delErr
+
+    if (orgIds.length > 0) {
+      const rows = orgIds.map((orgId) => ({
+        manager_id: managerId,
+        org_id: orgId,
+        active: true,
+      }))
+      const { error: insErr } = await supabase
+        .from('staff_manager_org_scope')
+        .insert(rows)
+      if (insErr) throw insErr
+    }
+
+    await fetchManagerOrgScopes()
   }
 
   async function replaceManagerScope(managerId: string, memberIds: string[]) {
@@ -665,6 +717,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     staff,
     organizations,
     managerScopes,
+    managerOrgScopes,
     categories,
     courses,
     progresses,
@@ -698,6 +751,8 @@ export const useCatalogStore = defineStore('catalog', () => {
     deleteOrganization,
     fetchManagerScopes,
     replaceManagerScope,
+    fetchManagerOrgScopes,
+    replaceManagerOrgScope,
     toggleCourseStatus,
     markLessonCompleted,
     init,

@@ -1,233 +1,275 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useCatalogStore } from '../stores/catalog'
+import { useAuthStore } from '../stores/auth'
 
 const catalog = useCatalogStore()
+const auth = useAuthStore()
 
-const selectedCategory = ref('全部分類')
-const selectedOrg = ref<'all' | string>('all')
+// 展開/收合狀態
+const collapsedOrgs = ref(new Set<number>())
+function toggleCollapse(orgId: number) {
+  if (collapsedOrgs.value.has(orgId)) collapsedOrgs.value.delete(orgId)
+  else collapsedOrgs.value.add(orgId)
+}
+function isCollapsed(orgId: number) { return collapsedOrgs.value.has(orgId) }
 
 onMounted(async () => {
   await Promise.all([
     catalog.fetchOrganizations(),
-    catalog.fetchCourses(),
+    catalog.fetchStaff(),
     catalog.fetchTeamProgressRows(),
+    auth.currentUser?.id ? catalog.fetchManagerOrgScopes(auth.currentUser.id) : Promise.resolve(),
   ])
 })
 
-const categoryByCourseId = computed(() => {
-  const map = new Map<string, string>()
-  catalog.courses.forEach((course) => {
-    map.set(course.id, course.categoryName || '未分類')
-  })
-  return map
-})
+// ── 計算此登入用戶可管轄的組織 ID ────────────────────────────────
+const managedOrgIds = computed<number[]>(() => {
+  const user = auth.currentUser
+  // 管理員 → 全部組織
+  if (auth.hasPermission('dashboard:view')) {
+    return catalog.organizations.map((o) => o.id)
+  }
+  if (!user) return []
 
-const orgNameById = computed(() => {
-  const map = new Map<number, string>()
+  const ids = new Set<number>()
+
+  // 1. 督導：在組織管理中登記為 supervisor 的組織（以 display name 比對）
   catalog.organizations.forEach((org) => {
-    map.set(org.id, org.shortName)
-  })
-  return map
-})
-
-const filteredRows = computed(() => {
-  return catalog.teamProgressRows.filter((row) => {
-    if (selectedOrg.value !== 'all' && String(row.orgId ?? '') !== selectedOrg.value) {
-      return false
-    }
-    const categoryName = categoryByCourseId.value.get(row.courseId) || '未分類'
-    if (selectedCategory.value !== '全部分類' && categoryName !== selectedCategory.value) {
-      return false
-    }
-    return true
-  })
-})
-
-const categorySummary = computed(() => {
-  const map = new Map<string, { total: number; completed: number; progressSum: number }>()
-
-  filteredRows.value.forEach((row) => {
-    const categoryName = categoryByCourseId.value.get(row.courseId) || '未分類'
-    const target = map.get(categoryName) ?? { total: 0, completed: 0, progressSum: 0 }
-    target.total += 1
-    target.completed += row.completedAt ? 1 : 0
-    target.progressSum += row.progressPercent
-    map.set(categoryName, target)
+    if (org.supervisor && org.supervisor === user.name) ids.add(org.id)
   })
 
-  return Array.from(map.entries()).map(([name, stat]) => ({
-    name,
-    averageProgress: stat.total > 0 ? Math.round(stat.progressSum / stat.total) : 0,
-    completed: stat.completed,
-    total: stat.total,
-  })).sort((a, b) => b.averageProgress - a.averageProgress)
+  // 2. 明確指派：staff_manager_org_scope
+  catalog.managerOrgScopes.forEach((scope) => {
+    if (scope.managerId === user.id && scope.active) ids.add(scope.orgId)
+  })
+
+  return Array.from(ids)
 })
 
-const categoryOptions = computed(() => ['全部分類', ...new Set(categorySummary.value.map((c) => c.name))])
+// ── 管轄的組織物件（排序：code 升冪）────────────────────────────
+const managedOrgs = computed(() =>
+  catalog.organizations
+    .filter((org) => managedOrgIds.value.includes(org.id))
+    .sort((a, b) => a.code.localeCompare(b.code)),
+)
 
-const lessonSummary = computed(() => {
+// ── 每人在某組織的彙整進度 ──────────────────────────────────────
+function staffProgressInOrg(orgId: number) {
+  const rows = catalog.teamProgressRows.filter((r) => r.orgId === orgId)
   const map = new Map<string, {
-    courseTitle: string
-    lessonTitle: string
-    total: number
-    completed: number
+    staffProfileId: string
+    displayName: string
+    employeeNo: string
     progressSum: number
+    completedCount: number
+    totalLessons: number
   }>()
 
-  filteredRows.value.forEach((row) => {
-    const key = row.lessonId
-    const target = map.get(key) ?? {
-      courseTitle: row.courseTitle,
-      lessonTitle: row.lessonTitle,
-      total: 0,
-      completed: 0,
+  rows.forEach((row) => {
+    const key = row.staffProfileId
+    const entry = map.get(key) ?? {
+      staffProfileId: row.staffProfileId,
+      displayName: row.displayName,
+      employeeNo: row.employeeNo,
       progressSum: 0,
+      completedCount: 0,
+      totalLessons: 0,
     }
-    target.total += 1
-    target.completed += row.completedAt ? 1 : 0
-    target.progressSum += row.progressPercent
-    map.set(key, target)
+    entry.progressSum += row.progressPercent
+    entry.completedCount += row.completedAt ? 1 : 0
+    entry.totalLessons += 1
+    map.set(key, entry)
   })
 
-  return Array.from(map.values()).map((stat) => ({
-    ...stat,
-    averageProgress: stat.total > 0 ? Math.round(stat.progressSum / stat.total) : 0,
-  })).sort((a, b) => b.averageProgress - a.averageProgress)
-})
+  return Array.from(map.values())
+    .map((e) => ({
+      ...e,
+      avgProgress: e.totalLessons > 0 ? Math.round(e.progressSum / e.totalLessons) : 0,
+    }))
+    .sort((a, b) => b.avgProgress - a.avgProgress)
+}
 
-const overallProgress = computed(() => {
-  if (filteredRows.value.length === 0) return 0
-  const sum = filteredRows.value.reduce((acc, row) => acc + row.progressPercent, 0)
-  return Math.round(sum / filteredRows.value.length)
-})
+function orgAvgProgress(orgId: number) {
+  const list = staffProgressInOrg(orgId)
+  if (list.length === 0) return 0
+  return Math.round(list.reduce((s, e) => s + e.avgProgress, 0) / list.length)
+}
+
+function orgStaffCount(orgId: number) {
+  return catalog.staff.filter((m) => m.enabled && m.orgId === orgId).length
+}
 </script>
 
 <template>
   <div class="page-stack">
     <section class="panel-card">
       <h2>轄區學習進度總覽</h2>
-      <p>大分類顯示平均進度%，點選分類後可看到各影片（lesson）的平均進度%。</p>
-
-      <div class="filters">
-        <label>
-          門市 / 部門
-          <select v-model="selectedOrg" class="form-input">
-            <option value="all">全部</option>
-            <option v-for="org in catalog.organizations" :key="org.id" :value="String(org.id)">
-              {{ org.code }}｜{{ org.shortName }}
-            </option>
-          </select>
-        </label>
-
-        <label>
-          分類
-          <select v-model="selectedCategory" class="form-input">
-            <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="progress-row" style="margin-top: .75rem; max-width: 380px;">
-        <div class="progress-bar"><span :style="{ width: `${overallProgress}%` }"></span></div>
-        <strong>{{ overallProgress }}%</strong>
-      </div>
+      <p>依管轄組織分區顯示人員學習進度，點選區塊標題可展開 / 收合。</p>
     </section>
 
-    <section class="panel-grid panel-grid--2">
-      <article class="panel-card">
-        <h3>大分類學習進度</h3>
+    <!-- 無管轄範圍 -->
+    <section v-if="managedOrgs.length === 0" class="panel-card">
+      <p class="muted-text">目前尚未設定管轄範圍。請聯絡管理員在「主管範圍管理」中指派組織。</p>
+    </section>
+
+    <!-- 每個管轄組織一個區塊 -->
+    <section
+      v-for="org in managedOrgs"
+      :key="org.id"
+      class="panel-card org-block"
+    >
+      <!-- 區塊 Header（可點擊展開/收合） -->
+      <button class="org-header" type="button" @click="toggleCollapse(org.id)">
+        <div class="org-header-left">
+          <span class="org-collapse-icon">{{ isCollapsed(org.id) ? '▶' : '▼' }}</span>
+          <div>
+            <strong class="org-name">{{ org.code }}｜{{ org.shortName }}</strong>
+            <span class="org-meta">
+              {{ org.type === 'store' ? '門市' : '總部 / 部門' }}
+              <template v-if="org.supervisor">・督導：{{ org.supervisor }}</template>
+            </span>
+          </div>
+        </div>
+        <div class="org-header-stats">
+          <span class="stat-chip">{{ orgStaffCount(org.id) }} 人</span>
+          <div class="progress-inline">
+            <div class="progress-bar-sm">
+              <span :style="{ width: `${orgAvgProgress(org.id)}%` }"></span>
+            </div>
+            <strong>{{ orgAvgProgress(org.id) }}%</strong>
+          </div>
+        </div>
+      </button>
+
+      <!-- 展開內容：人員進度列表 -->
+      <div v-if="!isCollapsed(org.id)" class="org-content">
         <table class="data-table">
           <thead>
             <tr>
-              <th>分類</th>
+              <th>人員</th>
+              <th>員編</th>
               <th>平均進度</th>
-              <th>完成數</th>
+              <th>完成 / 總影片</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="categorySummary.length === 0">
-              <td colspan="3" class="muted-text" style="text-align:center;padding:1rem">目前沒有進度資料</td>
-            </tr>
-            <tr v-for="cat in categorySummary" :key="cat.name">
-              <td>
-                <button class="table-action" type="button" @click="selectedCategory = cat.name">{{ cat.name }}</button>
+            <tr v-if="staffProgressInOrg(org.id).length === 0">
+              <td colspan="4" class="muted-text" style="text-align:center;padding:1rem">
+                此組織尚無學習進度資料
               </td>
-              <td>{{ cat.averageProgress }}%</td>
-              <td>{{ cat.completed }} / {{ cat.total }}</td>
+            </tr>
+            <tr
+              v-for="member in staffProgressInOrg(org.id)"
+              :key="member.staffProfileId"
+            >
+              <td><strong>{{ member.displayName }}</strong></td>
+              <td class="muted-text">{{ member.employeeNo || '—' }}</td>
+              <td>
+                <div class="progress-inline">
+                  <div class="progress-bar-sm">
+                    <span :style="{ width: `${member.avgProgress}%` }"></span>
+                  </div>
+                  <span>{{ member.avgProgress }}%</span>
+                </div>
+              </td>
+              <td>{{ member.completedCount }} / {{ member.totalLessons }}</td>
             </tr>
           </tbody>
         </table>
-      </article>
-
-      <article class="panel-card">
-        <h3>分類內各影片進度</h3>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>課程 / 影片</th>
-              <th>平均進度</th>
-              <th>完成數</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="lessonSummary.length === 0">
-              <td colspan="3" class="muted-text" style="text-align:center;padding:1rem">目前沒有進度資料</td>
-            </tr>
-            <tr v-for="item in lessonSummary" :key="`${item.courseTitle}-${item.lessonTitle}`">
-              <td>
-                <strong>{{ item.courseTitle }}</strong>
-                <div class="muted-text">{{ item.lessonTitle }}</div>
-              </td>
-              <td>{{ item.averageProgress }}%</td>
-              <td>{{ item.completed }} / {{ item.total }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </article>
-    </section>
-
-    <section class="panel-card">
-      <h3>明細資料</h3>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>人員</th>
-            <th>門市/部門</th>
-            <th>課程</th>
-            <th>影片</th>
-            <th>進度</th>
-            <th>狀態</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="filteredRows.length === 0">
-            <td colspan="6" class="muted-text" style="text-align:center;padding:1rem">目前沒有明細資料</td>
-          </tr>
-          <tr v-for="row in filteredRows" :key="`${row.staffProfileId}-${row.lessonId}`">
-            <td>{{ row.displayName }}<span class="muted-text">（{{ row.employeeNo || '未填員編' }}）</span></td>
-            <td>{{ row.orgId ? orgNameById.get(row.orgId) : '未編制' }}</td>
-            <td>{{ row.courseTitle }}</td>
-            <td>{{ row.lessonTitle }}</td>
-            <td>{{ row.progressPercent }}%</td>
-            <td>{{ row.completedAt ? '完成' : '學習中' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      </div>
     </section>
   </div>
 </template>
 
 <style scoped>
-.filters {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.org-block {
+  padding: 0;
+  overflow: hidden;
 }
 
-.filters label {
-  display: grid;
-  gap: 0.35rem;
-  min-width: 220px;
+.org-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  gap: 1rem;
+  text-align: left;
+  transition: background .15s;
+}
+
+.org-header:hover {
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 6%, transparent);
+}
+
+.org-header-left {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+
+.org-collapse-icon {
+  font-size: .8rem;
+  opacity: .7;
+  flex-shrink: 0;
+}
+
+.org-name {
+  display: block;
+  font-size: 1.02rem;
+}
+
+.org-meta {
+  display: block;
+  font-size: .8rem;
+  opacity: .65;
+  margin-top: .1rem;
+}
+
+.org-header-stats {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  flex-shrink: 0;
+}
+
+.stat-chip {
+  font-size: .8rem;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 18%, transparent);
+}
+
+.progress-inline {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 120px;
+}
+
+.progress-bar-sm {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  overflow: hidden;
+}
+
+.progress-bar-sm span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary, #f59e0b);
+  border-radius: 4px;
+  transition: width .3s;
+}
+
+.org-content {
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  padding: 0 1.25rem 1rem;
 }
 </style>

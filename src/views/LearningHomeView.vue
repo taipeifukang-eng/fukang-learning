@@ -325,21 +325,21 @@ const breadcrumbs = computed(() => {
 /* ── 麵包屑 ── */
 .portal-breadcrumb { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 .back-btn {
-  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15);
-  color:#d1d5db; border-radius:.5rem; padding:.3rem .75rem;
+  background:rgba(128,128,128,.12); border:1px solid rgba(128,128,128,.2);
+  color:inherit; border-radius:.5rem; padding:.3rem .75rem;
   font-size:.82rem; cursor:pointer;
 }
-.back-btn:hover { background:rgba(255,255,255,.14); color:#fff; }
+.back-btn:hover { background:rgba(128,128,128,.2); }
 .crumb { display:flex; align-items:center; gap:.35rem; font-size:.82rem; }
-.crumb-sep { color:#6b7280; }
-.crumb-label { color:#9ca3af; cursor:pointer; }
-.crumb-label:hover { color:#f59e0b; }
-.crumb-active { color:#f9fafb; font-weight:600; cursor:default; }
+.crumb-sep { opacity:.4; }
+.crumb-label { opacity:.6; cursor:pointer; }
+.crumb-label:hover { color:#f59e0b; opacity:1; }
+.crumb-active { font-weight:600; cursor:default; }
 
 /* ── 標題區 ── */
 .portal-header { text-align:center; margin-bottom:1.5rem; display:flex; flex-direction:column; align-items:center; gap:.5rem; }
-.portal-title { font-size:1.5rem; font-weight:800; color:#f9fafb; margin:0; }
-.portal-subtitle { font-size:.9rem; color:#9ca3af; margin:0; }
+.portal-title { font-size:1.5rem; font-weight:800; color:inherit; margin:0; }
+.portal-subtitle { font-size:.9rem; opacity:.6; margin:0; }
 .portal-role-badge {
   display:inline-flex; align-items:center; gap:.35rem;
   padding:.25rem .75rem; border-radius:2rem; font-size:.82rem; font-weight:600; color:#fff;
@@ -379,17 +379,17 @@ const breadcrumbs = computed(() => {
 .category-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:1rem; }
 .cat-card {
   display:flex; flex-direction:column; align-items:flex-start; gap:.4rem;
-  padding:1.25rem; border-radius:.9rem; border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.07); cursor:pointer; text-align:left;
+  padding:1.25rem; border-radius:.9rem; border:1px solid rgba(128,128,128,.2);
+  background:var(--color-surface, rgba(128,128,128,.06)); cursor:pointer; text-align:left;
   transition:transform .2s, background .2s;
   animation:pop-in .35s ease both;
 }
-.cat-card:hover { transform:translateY(-2px); background:rgba(255,255,255,.13); }
+.cat-card:hover { transform:translateY(-2px); background:var(--color-surface-hover, rgba(128,128,128,.13)); }
 .cat-card--all  { border-color:rgba(245,158,11,.4); background:rgba(245,158,11,.08); }
-.cat-card--uncat { border-color:rgba(255,255,255,.1); }
+.cat-card--uncat { border-color:rgba(128,128,128,.15); }
 .cat-card__icon  { font-size:1.6rem; }
-.cat-card__name  { margin:0; font-size:.95rem; font-weight:700; color:#f9fafb; }
-.cat-card__count { margin:0; font-size:.78rem; color:#9ca3af; flex:1; }
+.cat-card__name  { margin:0; font-size:.95rem; font-weight:700; color:inherit; }
+.cat-card__count { margin:0; font-size:.78rem; opacity:.55; flex:1; }
 .cat-card__cta   { font-size:.78rem; color:#f59e0b; font-weight:600; }
 
 /* ── Level 3：課程列表 ── */
@@ -398,14 +398,14 @@ const breadcrumbs = computed(() => {
 .learning-card {
   display:flex; flex-direction:column; border-radius:.9rem;
   overflow:hidden; text-decoration:none; transition:transform .2s, box-shadow .2s;
-  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+  background:var(--color-surface, rgba(128,128,128,.06)); border:1px solid rgba(128,128,128,.15);
 }
-.learning-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.4); }
+.learning-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.15); }
 .learning-card__cover { width:100%; height:160px; object-fit:cover; }
-.learning-card__cover--empty { background:#1f2937; }
+.learning-card__cover--empty { background:#cbd5e1; }
 .learning-card__body { padding:1rem; display:flex; flex-direction:column; gap:.4rem; }
-.learning-card__body h3 { margin:0; font-size:.95rem; font-weight:700; color:#f9fafb; }
-.learning-card__body p  { margin:0; font-size:.82rem; color:#9ca3af; }
+.learning-card__body h3 { margin:0; font-size:.95rem; font-weight:700; color:inherit; }
+.learning-card__body p  { margin:0; font-size:.82rem; opacity:.6; }
 .course-tag {
   display:inline-block; font-size:.72rem; font-weight:600;
   background:rgba(245,158,11,.2); color:#f59e0b; border-radius:.35rem; padding:.1rem .45rem;

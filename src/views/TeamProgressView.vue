@@ -31,10 +31,15 @@ onMounted(async () => {
   }).catch(() => { /* 靜默失敗，不影響頁面 */ })
 })
 
+// ── 工具：拆分逗號分隔的姓名清單 ────────────────────────────────
+function splitNames(raw: string | null | undefined): string[] {
+  return (raw ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+}
+
 // ── 計算此登入用戶可管轄的組織 ID ────────────────────────────────
 const managedOrgIds = computed<number[]>(() => {
   const user = auth.currentUser
-  // 管理員 → 全部組織
+  // 系統管理員（super_admin / content_admin / teacher）→ 全部組織
   if (auth.hasPermission('dashboard:view')) {
     return catalog.organizations.map((o) => o.id)
   }
@@ -42,17 +47,31 @@ const managedOrgIds = computed<number[]>(() => {
 
   const ids = new Set<number>()
 
-  // 1. 經理：門市登記 manager 中有自己名字的所有組織
+  // 1. 督導/副理：在組織管理中被登記為 supervisor 的組織
   catalog.organizations.forEach((org) => {
-    if (org.manager && org.manager === user.name) ids.add(org.id)
+    if (splitNames(org.supervisor).includes(user.name)) ids.add(org.id)
   })
 
-  // 2. 督導：在組織管理中登記為 supervisor 的組織（以 display name 比對）
+  // 2. 經理：在組織管理中被登記為 manager 的組織
+  //    同時，找出這些組織裡的所有督導，再把那些督導管理的其他組織也納入
+  const myManagedSupervisors = new Set<string>()
   catalog.organizations.forEach((org) => {
-    if (org.supervisor && org.supervisor === user.name) ids.add(org.id)
+    if (splitNames(org.manager).includes(user.name)) {
+      ids.add(org.id)
+      // 收集此組織的所有督導/副理名字
+      splitNames(org.supervisor).forEach((s) => myManagedSupervisors.add(s))
+    }
   })
+  // 把這些督導管理的其他門市也納入
+  if (myManagedSupervisors.size > 0) {
+    catalog.organizations.forEach((org) => {
+      if (splitNames(org.supervisor).some((s) => myManagedSupervisors.has(s))) {
+        ids.add(org.id)
+      }
+    })
+  }
 
-  // 3. 明確指派：staff_manager_org_scope
+  // 3. 明確指派：staff_manager_org_scope（主管範圍管理頁指派的）
   catalog.managerOrgScopes.forEach((scope) => {
     if (scope.managerId === user.id && scope.active) ids.add(scope.orgId)
   })

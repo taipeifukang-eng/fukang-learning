@@ -134,6 +134,11 @@ function getProgress(courseId: string) {
   return Math.round(pcts.reduce((a, b) => a + b, 0) / course.lessons.length)
 }
 
+/** 計算特定 section 的課程數量 */
+function sectionCourseCount(sectionId: string) {
+  return visibleCourses.value.filter((c) => (c.portalSections ?? []).includes(sectionId)).length
+}
+
 // ── 麵包屑 ────────────────────────────────────────────────────
 const breadcrumbs = computed(() => {
   const crumbs: Array<{ label: string; level: Level }> = [{ label: '學習入口', level: 'role' }]
@@ -212,7 +217,7 @@ const breadcrumbs = computed(() => {
             @click="navigate('category', selectedRole!, sec)"
           >
             <div class="section-card__icon">{{ sec.icon }}</div>
-            <h3 class="section-card__label">{{ sec.label }}</h3>
+            <h3 class="section-card__label">{{ sec.label }}<span class="section-card__count">({{ sectionCourseCount(sec.id) }})</span></h3>
             <p class="section-card__desc">{{ sec.description }}</p>
             <div class="section-card__cta">選擇分類 →</div>
           </button>
@@ -371,7 +376,8 @@ const breadcrumbs = computed(() => {
 }
 .section-card:hover { transform:translateY(-3px) scale(1.01); box-shadow:0 10px 28px rgba(0,0,0,.35); }
 .section-card__icon  { font-size:2rem; }
-.section-card__label { font-size:1.05rem; font-weight:700; margin:0; }
+.section-card__label { font-size:1.05rem; font-weight:700; margin:0; display:flex; align-items:baseline; gap:.35rem; }
+.section-card__count { font-size:.8rem; font-weight:500; opacity:.75; }
 .section-card__desc  { font-size:.82rem; opacity:.85; margin:0; flex:1; }
 .section-card__cta   { font-size:.8rem; opacity:.75; font-weight:600; margin-top:.25rem; }
 

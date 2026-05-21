@@ -298,7 +298,7 @@ function getActionTag(key: string): { label: string; cls: string } | null {
               <td style="text-align:right">
                 <div class="action-group">
                   <button class="act-btn act-btn--edit" @click="openRole(role.id)">編輯</button>
-                  <template v-if="!role.isSystem">
+                  <template v-if="role.key !== 'super_admin'">
                     <button
                       class="act-btn"
                       :class="role.enabled ? 'act-btn--warn' : 'act-btn--edit'"

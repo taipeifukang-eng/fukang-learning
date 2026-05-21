@@ -13,9 +13,22 @@ Deno.serve(async (req: Request) => {
   try {
     // ── 1. 驗證呼叫者為管理員 ─────────────────────────────────
     const authHeader = req.headers.get('Authorization') ?? ''
+
+    // 使用新版 SUPABASE_SECRET_KEYS（JSON dict），向下相容舊版
+    const secretKeysJson = Deno.env.get('SUPABASE_SECRET_KEYS')
+    let serviceRoleKey: string
+    if (secretKeysJson) {
+      const secretKeys = JSON.parse(secretKeysJson)
+      // 取第一個 key（service role）
+      serviceRoleKey = Object.values(secretKeys)[0] as string
+    } else {
+      // 向下相容舊版（仍可運作，只是 deprecated）
+      serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    }
+
     const learningClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      serviceRoleKey,
     )
 
     const userClient = createClient(

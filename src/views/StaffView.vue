@@ -85,6 +85,11 @@ async function syncJobTitles() {
 
 onMounted(async () => {
   await catalog.fetchStaff()
+
+  // 背景靜默同步職位（不擋畫面，完成後自動刷新）
+  supabase.functions.invoke('sync-job-titles').then(({ error }) => {
+    if (!error) catalog.fetchStaff()
+  }).catch(() => { /* 靜默失敗 */ })
 })
 </script>
 

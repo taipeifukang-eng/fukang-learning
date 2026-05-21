@@ -28,6 +28,10 @@ drop policy if exists roles_authenticated_read on public.roles;
 create policy roles_authenticated_read on public.roles
   for select using (auth.role() = 'authenticated');
 
+drop policy if exists roles_admin_write on public.roles;
+create policy roles_admin_write on public.roles
+  for all using (public.is_admin()) with check (public.is_admin());
+
 drop policy if exists permissions_authenticated_read on public.permissions;
 create policy permissions_authenticated_read on public.permissions
   for select using (auth.role() = 'authenticated');
@@ -35,6 +39,10 @@ create policy permissions_authenticated_read on public.permissions
 drop policy if exists role_permissions_authenticated_read on public.role_permissions;
 create policy role_permissions_authenticated_read on public.role_permissions
   for select using (auth.role() = 'authenticated');
+
+drop policy if exists role_permissions_admin_write on public.role_permissions;
+create policy role_permissions_admin_write on public.role_permissions
+  for all using (public.is_admin()) with check (public.is_admin());
 
 -- user_roles：自己可讀、管理員可全部操作
 drop policy if exists user_roles_self_read on public.user_roles;

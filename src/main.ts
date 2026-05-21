@@ -7,12 +7,12 @@ import './style.css'
 
 const app = createApp(App)
 const pinia = createPinia()
-
 app.use(pinia)
-app.use(router)
 
-// 恢復已登入的 Supabase session（頁面重整後不需重新登入）
+// 先完成 auth 初始化（還原 session），再安裝 router
+// 確保 beforeEach 守衛執行時 isAuthenticated 已正確設定，避免競態條件導致每次重整都被踢回登入頁
 const auth = useAuthStore()
-auth.init().finally(() => {
-  app.mount('#app')
-})
+await auth.init()
+
+app.use(router)
+app.mount('#app')

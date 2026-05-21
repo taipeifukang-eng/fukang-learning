@@ -13,7 +13,7 @@ as $$
     from public.user_roles ur
     join public.roles r on ur.role_id = r.id
     where ur.staff_profile_id = auth.uid()
-      and r.key in ('super_admin', 'content_admin', 'teacher')
+      and r.key in ('super_admin', 'content_admin', 'Supervision')
   );
 $$;
 

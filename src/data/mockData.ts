@@ -1,6 +1,6 @@
 import { getBunnyEmbedUrl } from '../lib/config'
 
-export type RoleKey = 'super_admin' | 'content_admin' | 'teacher' | 'student'
+export type RoleKey = 'super_admin' | 'content_admin' | 'Supervision' | 'student'
 
 export type OrgType = 'store' | 'headquarters'
 export interface Organization {
@@ -138,7 +138,7 @@ export const roleDefinitions: RoleDefinition[] = [
     permissions: ['dashboard:view', 'courses:view', 'courses:edit', 'quiz:edit', 'quiz:attempt', 'learning:view', 'categories:edit', 'progress:view', 'team_progress:view'],
   },
   {
-    key: 'teacher',
+    key: 'Supervision',
     title: '督導',
     description: '查看課程內容與學生學習進度。',
     permissions: ['dashboard:view', 'courses:view', 'quiz:edit', 'quiz:attempt', 'learning:view', 'team_progress:view'],
@@ -173,8 +173,8 @@ export const staffSeed: StaffMember[] = [
     name: '林老師',
     employeeNo: 'T001',
     jobTitle: '',
-    role: 'teacher',
-    roles: [{ id: 3, key: 'teacher', title: '督導' }],
+    role: 'Supervision',
+    roles: [{ id: 3, key: 'Supervision', title: '督導' }],
     orgId: 2,
     orgCode: 'TC',
     orgShortName: '台中店',

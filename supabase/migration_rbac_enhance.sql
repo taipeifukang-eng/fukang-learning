@@ -16,7 +16,7 @@ alter table public.roles
 -- 系統內建角色標記為 is_system
 update public.roles
   set is_system = true
-  where key in ('super_admin', 'content_admin', 'teacher', 'student');
+  where key in ('super_admin', 'content_admin', 'Supervision', 'student');
 
 -- 3. user_roles 補 created_at（若尚無）
 alter table public.user_roles
@@ -54,5 +54,5 @@ update public.permissions set category = '學習進度', description = '查看�
 -- ================================================================
 -- 5. 更名角色：教師 → 督導
 -- ================================================================
-update public.roles set title = '督導', description = '可建立課程，並查看學員學習進度。'
+update public.roles set key = 'Supervision', title = '督導', description = '可建立課程，並查看學員學習進度。'
   where key = 'teacher';

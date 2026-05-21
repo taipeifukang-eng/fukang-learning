@@ -2,25 +2,32 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
-import { roleDefinitions } from '../data/mockData'
+import { supabase } from '../lib/supabase'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
 
-const filterRoleKey = ref<string>('all')
+const filterJobTitle = ref<string>('all')
 const filterEnabled = ref<'all' | 'enabled' | 'disabled'>('all')
 const editingId = ref<string | null>(null)
 const editEmployeeNo = ref('')
 const editName = ref('')
-const editRole = ref('student')
+const editJobTitle = ref('')
 const saving = ref(false)
+const syncing = ref(false)
+const syncResult = ref('')
 
 const canToggle = computed(() => auth.hasPermission('staff:toggle'))
-const canAssignRole = computed(() => auth.hasPermission('staff:assign_role'))
+const canEdit = computed(() => auth.hasPermission('staff:assign_role') || auth.hasPermission('staff:toggle'))
+
+const jobTitleOptions = computed(() => {
+  const titles = catalog.staff.map((m) => m.jobTitle).filter(Boolean)
+  return [...new Set(titles)].sort()
+})
 
 const filteredStaff = computed(() => {
   return catalog.staff.filter((member) => {
-    if (filterRoleKey.value !== 'all' && member.role !== filterRoleKey.value) return false
+    if (filterJobTitle.value !== 'all' && member.jobTitle !== filterJobTitle.value) return false
     if (filterEnabled.value === 'enabled' && !member.enabled) return false
     if (filterEnabled.value === 'disabled' && member.enabled) return false
     return true
@@ -33,7 +40,7 @@ function startEdit(id: string) {
   editingId.value = id
   editEmployeeNo.value = target.employeeNo
   editName.value = target.name
-  editRole.value = target.role
+  editJobTitle.value = target.jobTitle
 }
 
 function cancelEdit() {
@@ -52,12 +59,27 @@ async function saveEdit(id: string) {
     if (editName.value.trim() && editName.value.trim() !== target.name) {
       await catalog.updateStaffName(id, editName.value.trim())
     }
-    if (canAssignRole.value && editRole.value !== target.role) {
-      await catalog.assignStaffRole(id, editRole.value)
+    if (editJobTitle.value.trim() !== target.jobTitle) {
+      await catalog.updateStaffJobTitle(id, editJobTitle.value.trim())
     }
     editingId.value = null
   } finally {
     saving.value = false
+  }
+}
+
+async function syncJobTitles() {
+  syncing.value = true
+  syncResult.value = ''
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-job-titles')
+    if (error) throw error
+    syncResult.value = `同步完成：${data?.updated ?? 0} 筆更新`
+    await catalog.fetchStaff()
+  } catch (e: any) {
+    syncResult.value = `同步失敗：${e.message}`
+  } finally {
+    syncing.value = false
   }
 }
 
@@ -72,14 +94,20 @@ onMounted(async () => {
       <div class="section-heading">
         <div>
           <h2>用戶管理</h2>
-          <p>管理已完成 LINE 登入的用戶，維護員編、平台角色與登入權限。</p>
+          <p>管理已完成 LINE 登入的用戶，維護員編、職位名稱與登入權限。</p>
+        </div>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <span v-if="syncResult" :class="syncResult.includes('失敗') ? 'sync-err' : 'sync-ok'">《 {{ syncResult }} 》</span>
+          <button class="table-action is-primary" :disabled="syncing" @click="syncJobTitles">
+            {{ syncing ? '同步中…' : '同步職位' }}
+          </button>
         </div>
       </div>
 
       <div class="filter-bar">
-        <select v-model="filterRoleKey" class="filter-select">
-          <option value="all">全部角色</option>
-          <option v-for="role in roleDefinitions" :key="role.key" :value="role.key">{{ role.title }}</option>
+        <select v-model="filterJobTitle" class="filter-select">
+          <option value="all">全部職位</option>
+          <option v-for="t in jobTitleOptions" :key="t" :value="t">{{ t }}</option>
         </select>
 
         <select v-model="filterEnabled" class="filter-select">
@@ -102,7 +130,7 @@ onMounted(async () => {
               <th>員編</th>
               <th>姓名</th>
               <th>Email</th>
-              <th>平台角色</th>
+              <th>職位名稱</th>
               <th>狀態</th>
               <th>操作</th>
             </tr>
@@ -114,8 +142,8 @@ onMounted(async () => {
                 <td>{{ member.name }}</td>
                 <td>{{ member.email || '—' }}</td>
                 <td>
-                  <span v-for="role in member.roles" :key="role.key" class="role-badge">{{ role.title }}</span>
-                  <span v-if="member.roles.length === 0" class="text-muted">未指派</span>
+                  <span v-if="member.jobTitle" class="job-title-chip">{{ member.jobTitle }}</span>
+                  <span v-else class="text-muted">未填寫</span>
                 </td>
                 <td>
                   <span class="status-pill" :class="member.enabled ? 'is-enabled' : 'is-disabled'">
@@ -141,9 +169,7 @@ onMounted(async () => {
                 <td><input v-model="editName" class="inline-input" placeholder="請輸入姓名" /></td>
                 <td>{{ member.email || '—' }}</td>
                 <td>
-                  <select v-model="editRole" class="inline-input" :disabled="!canAssignRole">
-                    <option v-for="role in roleDefinitions" :key="role.key" :value="role.key">{{ role.title }}</option>
-                  </select>
+                  <input v-model="editJobTitle" class="inline-input" placeholder="職位名稱" />
                 </td>
                 <td>
                   <span class="status-pill" :class="member.enabled ? 'is-enabled' : 'is-disabled'">
@@ -202,6 +228,28 @@ onMounted(async () => {
   background: color-mix(in srgb, var(--color-secondary) 22%, transparent);
   color: var(--color-secondary);
   font-size: 0.8rem;
+}
+
+.job-title-chip {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 16%, transparent);
+  color: var(--color-primary, #d97706);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.sync-ok {
+  font-size: 0.82rem;
+  color: #059669;
+  opacity: .85;
+}
+
+.sync-err {
+  font-size: 0.82rem;
+  color: #dc2626;
+  opacity: .85;
 }
 
 .text-muted {

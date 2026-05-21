@@ -52,6 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
         id: profile.value.id,
         name: profile.value.displayName,
         employeeNo: '',
+        jobTitle: '',
         role: (profile.value.roles[0]?.key ?? 'student') as RoleKey,
         roles: profile.value.roles,
         orgId: null,

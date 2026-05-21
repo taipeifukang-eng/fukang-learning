@@ -37,6 +37,7 @@ export interface StaffMember {
   id: string
   name: string
   employeeNo: string
+  jobTitle: string
   role: RoleKey
   roles: Array<{ id: number; key: string; title: string }>
   orgId: number | null
@@ -155,6 +156,7 @@ export const staffSeed: StaffMember[] = [
     id: 'staff-001',
     name: '陳主任',
     employeeNo: 'A001',
+    jobTitle: '',
     role: 'super_admin',
     roles: [{ id: 1, key: 'super_admin', title: '系統管理員' }],
     orgId: 1,
@@ -170,6 +172,7 @@ export const staffSeed: StaffMember[] = [
     id: 'staff-002',
     name: '林老師',
     employeeNo: 'T001',
+    jobTitle: '',
     role: 'teacher',
     roles: [{ id: 3, key: 'teacher', title: '教師' }],
     orgId: 2,
@@ -184,8 +187,7 @@ export const staffSeed: StaffMember[] = [
   {
     id: 'staff-003',
     name: '吳助理',
-    employeeNo: 'C001',
-    role: 'content_admin',
+    employeeNo: 'C001',    jobTitle: '',    role: 'content_admin',
     roles: [{ id: 2, key: 'content_admin', title: '內容管理員' }],
     orgId: null,
     orgCode: '',

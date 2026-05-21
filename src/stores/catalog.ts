@@ -108,7 +108,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       const { data, error: err } = await supabase
         .from('staff_profiles')
         .select(`
-          id, display_name, employee_no, email, department, enabled, org_id, created_at,
+          id, display_name, employee_no, job_title, email, department, enabled, org_id, created_at,
           user_roles (
             roles (id, key, title)
           )
@@ -121,6 +121,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         id: profile.id,
         name: profile.display_name,
         employeeNo: profile.employee_no ?? '',
+        jobTitle: profile.job_title ?? '',
         email: profile.email ?? '',
         department: profile.department ?? '',
         orgId: profile.org_id ?? null,
@@ -171,6 +172,16 @@ export const useCatalogStore = defineStore('catalog', () => {
     if (err) throw err
     const target = staff.value.find((m) => m.id === id)
     if (target) target.employeeNo = employeeNo.trim()
+  }
+
+  async function updateStaffJobTitle(id: string, jobTitle: string) {
+    const { error: err } = await supabase
+      .from('staff_profiles')
+      .update({ job_title: jobTitle.trim() })
+      .eq('id', id)
+    if (err) throw err
+    const target = staff.value.find((m) => m.id === id)
+    if (target) target.jobTitle = jobTitle.trim()
   }
 
   async function updateStaffName(id: string, name: string) {
@@ -929,6 +940,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     updateLessonProgress,
     toggleStaffStatus,
     updateStaffEmployeeNo,
+    updateStaffJobTitle,
     updateStaffName,
     updateStaffOrg,
     assignStaffRole,

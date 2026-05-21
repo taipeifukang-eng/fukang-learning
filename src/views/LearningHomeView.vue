@@ -56,10 +56,8 @@ const portalConfig: PortalRole[] = [
     accentColor: '#0d9488',
     bgClass: 'role-pharmacist',
     sections: [
-      { id: 'pharmacist-newcomer', label: '新進藥師', icon: '🌱', description: '新進藥師培訓與基礎訓練',         color: '#10b981' },
-      { id: 'pharmacist-clinical', label: '藥學專業',  icon: '🔬', description: '藥物知識、用藥諮詢與臨床應用', color: '#0d9488' },
-      { id: 'pharmacist-law',      label: '法規合規',  icon: '📜', description: '醫療法規、藥事管理與稽核',     color: '#7c3aed' },
-      { id: 'pharmacist-general',  label: '通識學習',  icon: '📚', description: '藥師共用職能課程',             color: '#64748b' },
+      { id: 'pharmacist-clinical', label: '藥學專業', icon: '🔬', description: '藥物知識、用藥諮詢與臨床應用', color: '#0d9488' },
+      { id: 'pharmacist-general',  label: '通識學習', icon: '📚', description: '藥師共用職能課程',             color: '#64748b' },
     ],
   },
   {

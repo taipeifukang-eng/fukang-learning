@@ -20,9 +20,7 @@ const PORTAL_SECTIONS = [
   { id: 'store-newcomer',      label: '🌱 門市－新人培訓' },
   { id: 'store-supervisor',    label: '👔 門市－主管課程' },
   { id: 'store-general',       label: '📚 門市－通識學習' },
-  { id: 'pharmacist-newcomer', label: '🌱 藥師－新進藥師' },
   { id: 'pharmacist-clinical', label: '🔬 藥師－藥學專業' },
-  { id: 'pharmacist-law',      label: '📜 藥師－法規合規' },
   { id: 'pharmacist-general',  label: '📚 藥師－通識學習' },
   { id: 'hq-general',          label: '🏢 總部－通識學習' },
 ] as const

@@ -75,8 +75,11 @@ async function saveScope() {
   try {
     await catalog.replaceManagerOrgScope(selectedManagerId.value, selectedOrgIds.value)
     saveMessage.value = '✓ 已儲存組織管轄範圍。'
-  } catch (err) {
-    saveMessage.value = err instanceof Error ? err.message : '儲存失敗'
+  } catch (err: any) {
+    // 顯示完整錯誤訊息（含 Supabase PostgrestError）
+    const msg = err?.message ?? err?.error_description ?? JSON.stringify(err)
+    saveMessage.value = `儲存失敗：${msg}`
+    console.error('[saveScope]', err)
   } finally {
     saving.value = false
   }

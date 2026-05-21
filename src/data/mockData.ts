@@ -139,7 +139,7 @@ export const roleDefinitions: RoleDefinition[] = [
   },
   {
     key: 'teacher',
-    title: '教師',
+    title: '督導',
     description: '查看課程內容與學生學習進度。',
     permissions: ['dashboard:view', 'courses:view', 'quiz:edit', 'quiz:attempt', 'learning:view', 'team_progress:view'],
   },
@@ -174,7 +174,7 @@ export const staffSeed: StaffMember[] = [
     employeeNo: 'T001',
     jobTitle: '',
     role: 'teacher',
-    roles: [{ id: 3, key: 'teacher', title: '教師' }],
+    roles: [{ id: 3, key: 'teacher', title: '督導' }],
     orgId: 2,
     orgCode: 'TC',
     orgShortName: '台中店',

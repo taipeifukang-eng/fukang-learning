@@ -21,7 +21,7 @@ on conflict (key) do nothing;
 insert into public.roles (key, title, description) values
   ('super_admin',    '系統管理員', '管理整體平台設定、權限、人員與課程內容。'),
   ('content_admin',  '內容管理員', '維護課程與影片清單，但不處理角色指派。'),
-  ('teacher',        '教師',       '可建立課程，並查看學員學習進度。'),
+  ('teacher',        '督導',       '可建立課程，並查看學員學習進度。'),
   ('student',        '學員',       '僅限存取學習課程頁面。')
 on conflict (key) do nothing;
 

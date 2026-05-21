@@ -66,7 +66,7 @@ const tagline = computed(() => {
       <div v-if="!isRealLineConfigured" class="demo-role-grid">
         <button type="button" @click="loginAs('super_admin')">示範：系統管理員</button>
         <button type="button" @click="loginAs('content_admin')">示範：內容管理員</button>
-        <button type="button" @click="loginAs('teacher')">示範：教師</button>
+        <button type="button" @click="loginAs('teacher')">示範：督導</button>
         <button type="button" @click="loginAs('student')">示範：學生</button>
       </div>
     </div>

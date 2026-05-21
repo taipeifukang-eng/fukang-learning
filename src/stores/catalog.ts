@@ -12,6 +12,34 @@ import {
   type StaffMember,
 } from '../data/mockData'
 
+export interface DbRole {
+  id: number
+  key: string
+  title: string
+  description: string
+  isSystem: boolean
+  enabled: boolean
+  permissionCount: number
+  userCount: number
+}
+
+export interface DbPermission {
+  id: number
+  key: string
+  title: string
+  description: string
+  category: string
+}
+
+export interface RoleMember {
+  staffProfileId: string
+  displayName: string
+  employeeNo: string
+  email: string
+  enabled: boolean
+  assignedAt: string
+}
+
 export const useCatalogStore = defineStore('catalog', () => {
   const managerScopes = ref<Array<{
     id: number
@@ -30,6 +58,10 @@ export const useCatalogStore = defineStore('catalog', () => {
     createdAt: string
   }>>([])
   const staff = ref<StaffMember[]>([])
+
+  // ── RBAC 管理 ─────────────────────────────────────────────
+  const allRoles = ref<DbRole[]>([])
+  const allPermissions = ref<DbPermission[]>([])
   const organizations = ref<Organization[]>([])
   const categories = ref<Category[]>([])
   const courses = ref<Course[]>([])
@@ -711,6 +743,153 @@ export const useCatalogStore = defineStore('catalog', () => {
     // 已被 updateLessonProgress 取代，保留為相容
   }
 
+  // ── RBAC 完整管理 ──────────────────────────────────────────
+  async function fetchAllRoles() {
+    const { data, error: err } = await supabase
+      .from('roles')
+      .select('id, key, title, description, is_system, enabled, role_permissions(count), user_roles(count)')
+      .order('id')
+    if (err) throw err
+    allRoles.value = (data ?? []).map((r: any) => ({
+      id: r.id,
+      key: r.key,
+      title: r.title,
+      description: r.description ?? '',
+      isSystem: r.is_system ?? false,
+      enabled: r.enabled ?? true,
+      permissionCount: Number(r.role_permissions?.[0]?.count ?? 0),
+      userCount: Number(r.user_roles?.[0]?.count ?? 0),
+    }))
+  }
+
+  async function fetchAllPermissions() {
+    const { data, error: err } = await supabase
+      .from('permissions')
+      .select('id, key, title, description, category')
+      .order('category')
+    if (err) throw err
+    allPermissions.value = (data ?? []).map((p: any) => ({
+      id: p.id,
+      key: p.key,
+      title: p.title,
+      description: p.description ?? '',
+      category: p.category ?? '一般',
+    }))
+  }
+
+  async function fetchRolePermissionIds(roleId: number): Promise<number[]> {
+    const { data, error: err } = await supabase
+      .from('role_permissions')
+      .select('permission_id')
+      .eq('role_id', roleId)
+    if (err) throw err
+    return (data ?? []).map((r: any) => r.permission_id)
+  }
+
+  async function fetchRoleMembers(roleId: number): Promise<RoleMember[]> {
+    const { data, error: err } = await supabase
+      .from('user_roles')
+      .select('created_at, staff_profiles(id, display_name, employee_no, email, enabled)')
+      .eq('role_id', roleId)
+      .order('created_at')
+    if (err) throw err
+    return (data ?? []).map((r: any) => ({
+      staffProfileId: r.staff_profiles?.id ?? '',
+      displayName: r.staff_profiles?.display_name ?? '',
+      employeeNo: r.staff_profiles?.employee_no ?? '',
+      email: r.staff_profiles?.email ?? '',
+      enabled: r.staff_profiles?.enabled ?? false,
+      assignedAt: r.created_at ?? '',
+    }))
+  }
+
+  async function saveRolePermissions(roleId: number, permissionIds: number[]) {
+    const { error: delErr } = await supabase
+      .from('role_permissions')
+      .delete()
+      .eq('role_id', roleId)
+    if (delErr) throw delErr
+    if (permissionIds.length > 0) {
+      const { error: insErr } = await supabase
+        .from('role_permissions')
+        .insert(permissionIds.map(pid => ({ role_id: roleId, permission_id: pid })))
+      if (insErr) throw insErr
+    }
+    const target = allRoles.value.find(r => r.id === roleId)
+    if (target) target.permissionCount = permissionIds.length
+  }
+
+  async function addMemberToRole(roleId: number, employeeNo: string): Promise<any> {
+    const { data: profile, error: findErr } = await supabase
+      .from('staff_profiles')
+      .select('id, display_name, employee_no, email, enabled')
+      .eq('employee_no', employeeNo.trim())
+      .single()
+    if (findErr || !profile) throw new Error('找不到此員編的人員')
+    const { error: insErr } = await supabase
+      .from('user_roles')
+      .insert({ staff_profile_id: profile.id, role_id: roleId })
+    if (insErr) {
+      if (insErr.code === '23505') throw new Error('此人員已擁有此角色')
+      throw insErr
+    }
+    const target = allRoles.value.find(r => r.id === roleId)
+    if (target) target.userCount++
+    return profile
+  }
+
+  async function removeMemberFromRole(roleId: number, staffId: string) {
+    const { error: err } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('role_id', roleId)
+      .eq('staff_profile_id', staffId)
+    if (err) throw err
+    const target = allRoles.value.find(r => r.id === roleId)
+    if (target && target.userCount > 0) target.userCount--
+  }
+
+  async function createRole(data: { key: string; title: string; description: string }): Promise<number> {
+    const { data: row, error: err } = await supabase
+      .from('roles')
+      .insert({ key: data.key.trim(), title: data.title.trim(), description: data.description.trim(), is_system: false, enabled: true })
+      .select()
+      .single()
+    if (err) throw err
+    allRoles.value.push({
+      id: row.id, key: row.key, title: row.title,
+      description: row.description ?? '', isSystem: false, enabled: true,
+      permissionCount: 0, userCount: 0,
+    })
+    return row.id as number
+  }
+
+  async function updateRole(id: number, data: { key: string; title: string; description: string }) {
+    const { error: err } = await supabase
+      .from('roles')
+      .update({ key: data.key.trim(), title: data.title.trim(), description: data.description.trim() })
+      .eq('id', id)
+    if (err) throw err
+    const target = allRoles.value.find(r => r.id === id)
+    if (target) Object.assign(target, { key: data.key.trim(), title: data.title.trim(), description: data.description.trim() })
+  }
+
+  async function toggleRoleEnabled(id: number, enabled: boolean) {
+    const { error: err } = await supabase
+      .from('roles')
+      .update({ enabled })
+      .eq('id', id)
+    if (err) throw err
+    const target = allRoles.value.find(r => r.id === id)
+    if (target) target.enabled = enabled
+  }
+
+  async function deleteRole(id: number) {
+    const { error: err } = await supabase.from('roles').delete().eq('id', id)
+    if (err) throw err
+    allRoles.value = allRoles.value.filter(r => r.id !== id)
+  }
+
   // ── 初始化 ────────────────────────────────────────────────
   async function init() {
     await fetchOrganizations()
@@ -727,6 +906,8 @@ export const useCatalogStore = defineStore('catalog', () => {
     progresses,
     teamProgressRows,
     roles: roleDefinitions,
+    allRoles,
+    allPermissions,
     isLoading,
     error,
     enabledStaffCount,
@@ -759,6 +940,17 @@ export const useCatalogStore = defineStore('catalog', () => {
     replaceManagerOrgScope,
     toggleCourseStatus,
     markLessonCompleted,
+    fetchAllRoles,
+    fetchAllPermissions,
+    fetchRolePermissionIds,
+    fetchRoleMembers,
+    saveRolePermissions,
+    addMemberToRole,
+    removeMemberFromRole,
+    createRole,
+    updateRole,
+    toggleRoleEnabled,
+    deleteRole,
     init,
   }
 })

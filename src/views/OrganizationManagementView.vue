@@ -21,19 +21,23 @@ const saveError = ref('')
 
 const canEdit = computed(() => auth.hasPermission('orgs:edit'))
 const deleting = ref<number | null>(null)
+function splitNames(raw: string | null | undefined): string[] {
+  return (raw ?? '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
 const supervisorOptions = computed(() => {
-  const names = catalog.organizations.map((o) => o.supervisor).filter(Boolean)
+  const names = catalog.organizations.flatMap((o) => splitNames(o.supervisor))
   return [...new Set(names)].sort()
 })
 const managerOptions = computed(() => {
-  const names = catalog.organizations.map((o) => o.manager).filter(Boolean)
+  const names = catalog.organizations.flatMap((o) => splitNames(o.manager))
   return [...new Set(names)].sort()
 })
 const filteredOrganizations = computed(() => {
   return catalog.organizations.filter((item) => {
     if (filterType.value !== 'all' && item.type !== filterType.value) return false
-    if (filterSupervisor.value !== 'all' && item.supervisor !== filterSupervisor.value) return false
-    if (filterManager.value !== 'all' && item.manager !== filterManager.value) return false
+    if (filterSupervisor.value !== 'all' && !splitNames(item.supervisor).includes(filterSupervisor.value)) return false
+    if (filterManager.value !== 'all' && !splitNames(item.manager).includes(filterManager.value)) return false
     return true
   })
 })
@@ -158,11 +162,11 @@ onMounted(async () => {
         </label>
         <label>
           <span>督導/副理</span>
-          <input v-model="supervisor" class="text-input" maxlength="20" placeholder="請輸入督導/副理姓名" :disabled="!canEdit" />
+          <input v-model="supervisor" class="text-input" maxlength="100" placeholder="多位請用「,」分開，例：王小明,李大華" :disabled="!canEdit" />
         </label>
         <label>
           <span>經理</span>
-          <input v-model="manager" class="text-input" maxlength="20" placeholder="請輸入經理姓名" :disabled="!canEdit" />
+          <input v-model="manager" class="text-input" maxlength="100" placeholder="多位請用「,」分開，例：王小明,李大華" :disabled="!canEdit" />
         </label>
 
         <div class="form-actions">
@@ -191,8 +195,18 @@ onMounted(async () => {
               <td>{{ organization.code }}</td>
               <td>{{ typeLabel(organization.type) }}</td>
               <td>{{ organization.shortName }}</td>
-              <td>{{ organization.supervisor || '—' }}</td>
-              <td>{{ organization.manager || '—' }}</td>
+              <td>
+                <span v-if="!organization.supervisor">—</span>
+                <span v-else class="name-chips">
+                  <span v-for="n in splitNames(organization.supervisor)" :key="n" class="name-chip">{{ n }}</span>
+                </span>
+              </td>
+              <td>
+                <span v-if="!organization.manager">—</span>
+                <span v-else class="name-chips">
+                  <span v-for="n in splitNames(organization.manager)" :key="n" class="name-chip">{{ n }}</span>
+                </span>
+              </td>
               <td class="action-cell">
                 <button class="table-action" type="button" :disabled="!canEdit" @click="startEdit(organization.id)">
                   編輯
@@ -274,6 +288,22 @@ onMounted(async () => {
 .form-actions {
   display: flex;
   gap: 0.6rem;
+}
+
+.name-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.name-chip {
+  font-size: 0.78rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #f59e0b) 16%, transparent);
+  color: var(--color-primary, #d97706);
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .empty-row {

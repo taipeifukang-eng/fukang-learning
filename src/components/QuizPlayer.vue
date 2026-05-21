@@ -55,13 +55,18 @@ const bestAttempt = computed(() =>
   }, null),
 )
 
+function stripOptionPrefix(text: string): string {
+  // 去除開頭的 (A)/(B)/（A）/A. 等格式，避免隨機排列後仍顯示原始順序標籤
+  return text.replace(/^\s*[（(][A-Za-z\d][)）]\s*/, '').replace(/^\s*[A-Za-z\d][.、]\s*/, '').trim()
+}
+
 function startQuiz() {
   selected.value = new Map()
   showAnswers.value = false
   // 每次作答將各題選項隨機打亂，防止記憶答案位置
   displayQuestions.value = props.quiz.questions.map(q => ({
     ...q,
-    options: shuffleArray(q.options),
+    options: shuffleArray(q.options).map(o => ({ ...o, optionText: stripOptionPrefix(o.optionText) })),
   }))
   phase.value = 'doing'
 }
@@ -249,7 +254,7 @@ function formatDate(iso: string | null) {
               <span class="opt-marker">
                 {{ opt.isCorrect ? '✓' : (selected.get(q.id)?.has(opt.id) ? '✗' : '○') }}
               </span>
-              {{ opt.optionText }}
+              {{ stripOptionPrefix(opt.optionText) }}
             </div>
           </div>
           <div v-if="q.explanation" class="explanation">💡 {{ q.explanation }}</div>

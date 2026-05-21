@@ -236,34 +236,30 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Init：app 啟動時恢復 session ──────────────────────────────────
   async function init() {
-    return new Promise<void>((resolve) => {
-      // 安全逾時：若 INITIAL_SESSION 超過 5 秒未觸發，強制讓 app 繼續掛載
-      const timer = setTimeout(() => resolve(), 5000)
-
-      supabase.auth.onAuthStateChange(async (event, newSession) => {
-        if (event === 'INITIAL_SESSION') {
-          clearTimeout(timer)
-          if (newSession) {
-            session.value = newSession
-            mockUser.value = null
-            localStorage.removeItem(MOCK_STORAGE_KEY)
-            // try/catch 確保任何例外都不會卡住 resolve()，app 一定會掛載
-            try { await fetchProfile(newSession) } catch { /* ignore */ }
-          }
-          resolve()
-        } else if (newSession) {
-          session.value = newSession
+    // Supabase v2 正確做法：
+    // onAuthStateChange callback 內【只做同步更新】，絕不 await 任何東西。
+    // 在 callback 內 await（包含任何 Supabase 呼叫）會阻塞 auth 狀態機 → 頁面卡死。
+    supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'SIGNED_OUT') {
+        session.value = null
+        profile.value = null
+      } else if (newSession) {
+        // 只更新 session（同步），讓 isAuthenticated 在 token refresh 後維持正確
+        session.value = newSession
+        if (!newSession) {
           mockUser.value = null
-          localStorage.removeItem(MOCK_STORAGE_KEY)
-          if (!profile.value || profile.value.id !== newSession.user.id) {
-            try { await fetchProfile(newSession) } catch { /* ignore */ }
-          }
-        } else if (event === 'SIGNED_OUT') {
-          session.value = null
-          profile.value = null
         }
-      })
+      }
     })
+
+    // 初始化：從 localStorage 還原 session（在 callback 外部安全呼叫）
+    const { data: { session: existing } } = await supabase.auth.getSession()
+    if (existing) {
+      session.value = existing
+      mockUser.value = null
+      localStorage.removeItem(MOCK_STORAGE_KEY)
+      await fetchProfile(existing)
+    }
   }
 
   return {

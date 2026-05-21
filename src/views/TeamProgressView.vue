@@ -24,6 +24,11 @@ onMounted(async () => {
     catalog.fetchCourses(),
     auth.currentUser?.id ? catalog.fetchManagerOrgScopes(auth.currentUser.id) : Promise.resolve(),
   ])
+
+  // 背景靜默同步職位（不擋畫面，完成後自動刷新人員資料）
+  supabase.functions.invoke('sync-job-titles').then(({ error }) => {
+    if (!error) catalog.fetchStaff()
+  }).catch(() => { /* 靜默失敗，不影響頁面 */ })
 })
 
 // ── 計算此登入用戶可管轄的組織 ID ────────────────────────────────

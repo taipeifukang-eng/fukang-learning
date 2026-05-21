@@ -18,6 +18,8 @@ export function buildLineAuthorizeUrl(state: string, nonce: string) {
     scope: 'profile openid',
     state,
     nonce,
+    // 每次都強制顯示 LINE 帳號選擇畫面，防止公用電腦自動帶入前一個登入者
+    prompt: 'consent',
   })
   return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`
 }

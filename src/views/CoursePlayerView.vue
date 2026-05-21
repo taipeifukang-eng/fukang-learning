@@ -31,6 +31,7 @@ const watchedHighWater = ref(0)
 const durationSeconds = ref(0)
 const lastSavedWatched = ref(0)
 const isCompleted = ref(false)
+const videoEnded = ref(false)   // 只有收到 ended 事件才為 true，避免進度同步提前觸發切換
 const syncError = ref('')
 const syncing = ref(false)
 const isPausedByEvent = ref(false)
@@ -403,6 +404,7 @@ function handlePlayerMessage(event: MessageEvent) {
   // 影片結束時直接同步完成
   if (eventName === 'ended' || eventName === 'end' || eventName === 'complete' || eventName === 'videocompleted') {
     isPausedByEvent.value = true
+    videoEnded.value = true
     debugPlayer('pause gate ON (ended)')
     const dur = durationSeconds.value
     if (dur > 0) watchedHighWater.value = dur
@@ -479,11 +481,16 @@ watch([embedUrl, progressReady], async ([url, ready]) => {
   void setupPlayerBridge()
 })
 
-// 影片完成時自動切到測驗 tab
-watch(isCompleted, (val) => {
+// 影片真正結束後才自動切到測驗 tab
+watch(videoEnded, (val) => {
   if (val && lessonQuiz.value && activeTab.value === 'video') {
     activeTab.value = 'quiz'
   }
+})
+
+// 切換課程時重置 videoEnded 旗標
+watch(selectedLessonId, () => {
+  videoEnded.value = false
 })
 
 onMounted(async () => {

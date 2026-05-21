@@ -49,6 +49,20 @@ const portalConfig: PortalRole[] = [
     ],
   },
   {
+    id: 'pharmacist',
+    label: '藥師人員',
+    description: '藥師專業知識、法規與臨床應用資源',
+    icon: '💊',
+    accentColor: '#0d9488',
+    bgClass: 'role-pharmacist',
+    sections: [
+      { id: 'pharmacist-newcomer', label: '新進藥師', icon: '🌱', description: '新進藥師培訓與基礎訓練',         color: '#10b981' },
+      { id: 'pharmacist-clinical', label: '藥學專業',  icon: '🔬', description: '藥物知識、用藥諮詢與臨床應用', color: '#0d9488' },
+      { id: 'pharmacist-law',      label: '法規合規',  icon: '📜', description: '醫療法規、藥事管理與稽核',     color: '#7c3aed' },
+      { id: 'pharmacist-general',  label: '通識學習',  icon: '📚', description: '藥師共用職能課程',             color: '#64748b' },
+    ],
+  },
+  {
     id: 'hq-staff',
     label: '總部人員',
     description: '行政、採購、行銷等職能學習資源',
@@ -359,6 +373,7 @@ const breadcrumbs = computed(() => {
 }
 .role-card:hover { transform:translateY(-4px); box-shadow:0 12px 30px rgba(0,0,0,.35); }
 .role-store { background:linear-gradient(135deg,#78350f,#92400e,#b45309); box-shadow:0 4px 20px rgba(245,158,11,.25); }
+.role-pharmacist { background:linear-gradient(135deg,#0f766e,#0d9488); box-shadow:0 4px 20px rgba(13,148,136,.35); }
 .role-hq    { background:linear-gradient(135deg,#1e293b,#334155); box-shadow:0 4px 20px rgba(0,0,0,.3); }
 .role-card__icon { font-size:2.75rem; flex-shrink:0; }
 .role-card__body h3 { margin:0 0 .3rem; font-size:1.2rem; font-weight:800; color:#fff; }

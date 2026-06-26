@@ -1,0 +1,40 @@
+<template>
+  <svg
+    class="brand-logo"
+    viewBox="0 0 128 128"
+    role="img"
+    aria-labelledby="brand-logo-title"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <title id="brand-logo-title">富康學院</title>
+    <defs>
+      <linearGradient id="brand-logo-bg" x1="22" x2="108" y1="16" y2="116" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#0f766e" />
+        <stop offset="0.48" stop-color="#0d9488" />
+        <stop offset="1" stop-color="#f59e0b" />
+      </linearGradient>
+      <linearGradient id="brand-logo-page" x1="32" x2="96" y1="64" y2="106" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#ffffff" />
+        <stop offset="1" stop-color="#fff7ed" />
+      </linearGradient>
+    </defs>
+    <rect width="128" height="128" rx="28" fill="url(#brand-logo-bg)" />
+    <path
+      d="M64 28c-13.25 0-24 10.75-24 24 0 10.49 6.73 19.41 16.1 22.67V57.9H45.45V46.1H56.1V35.45h15.8V46.1h10.65v11.8H71.9v16.77C81.27 71.41 88 62.49 88 52c0-13.25-10.75-24-24-24Z"
+      fill="#ffffff"
+      opacity="0.96"
+    />
+    <path d="M58 39h12v27H58z" fill="#0f766e" />
+    <path d="M50.5 46.5h27v12h-27z" fill="#0f766e" />
+    <path
+      d="M26 78.5c0-6.9 5.6-12.5 12.5-12.5H62v42H38.5C31.6 108 26 102.4 26 95.5v-17Z"
+      fill="url(#brand-logo-page)"
+    />
+    <path
+      d="M66 66h23.5c6.9 0 12.5 5.6 12.5 12.5v17c0 6.9-5.6 12.5-12.5 12.5H66V66Z"
+      fill="url(#brand-logo-page)"
+    />
+    <path d="M62 70v35.5M66 70v35.5" stroke="#0f766e" stroke-width="3.8" stroke-linecap="round" opacity="0.58" />
+    <path d="M38 80h14M38 91h14M76 80h14M76 91h14" stroke="#b45309" stroke-width="4" stroke-linecap="round" opacity="0.82" />
+  </svg>
+</template>

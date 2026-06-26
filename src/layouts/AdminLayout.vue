@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import BrandLogo from '../components/BrandLogo.vue'
 import { appConfig } from '../lib/config'
 import { useAuthStore } from '../stores/auth'
 import { useUiStore } from '../stores/ui'
@@ -158,7 +159,7 @@ onMounted(() => {
         <button class="admin-icon-button" type="button" :aria-label="ui.menuButtonLabel" @click="ui.toggleMenu">
           <AppIcon name="menu" />
         </button>
-        <div class="admin-brand-mark">FK</div>
+        <BrandLogo class="admin-brand-logo" />
         <div class="admin-header__title">
           <strong>{{ appConfig.appName }}</strong>
           <span>{{ appConfig.appSubtitle }}</span>

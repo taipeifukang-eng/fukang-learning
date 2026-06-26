@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import BrandLogo from '../components/BrandLogo.vue'
 import { appConfig } from '../lib/config'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
@@ -44,7 +45,7 @@ const tagline = computed(() => {
     <div class="login-card">
       <!-- 品牌 -->
       <div class="login-card__brand">
-        <div class="admin-brand-mark">FK</div>
+        <BrandLogo class="login-brand-logo" />
         <div>
           <h1>富康學院學習網</h1>
         </div>

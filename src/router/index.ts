@@ -138,6 +138,18 @@ const router = createRouter({
           },
         },
         {
+          path: 'admin/scripts',
+          name: 'admin-scripts',
+          component: () => import('../views/ScriptPlanningView.vue'),
+          meta: {
+            title: '腳本設計',
+            icon: 'fileText',
+            group: '課程管理',
+            requiresAuth: true,
+            permission: 'courses:view',
+          },
+        },
+        {
           path: 'learning',
           name: 'learning-home',
           component: () => import('../views/LearningHomeView.vue'),

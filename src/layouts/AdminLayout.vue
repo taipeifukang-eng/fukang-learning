@@ -63,6 +63,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { to: '/admin/categories', title: '分類管理', icon: 'tag' },
       { to: '/admin/courses', title: '課程影片管理', icon: 'video' },
+      { to: '/admin/scripts', title: '腳本設計', icon: 'fileText' },
     ],
   },
   {
@@ -86,6 +87,7 @@ const menuPermissionMap: Record<string, string | undefined> = {
   '/admin/roles': 'roles:view',
   '/admin/categories': 'categories:edit',
   '/admin/courses': 'courses:view',
+  '/admin/scripts': 'courses:view',
   '/learning': 'learning:view',
   '/learning/my-progress': 'learning:view',
 }

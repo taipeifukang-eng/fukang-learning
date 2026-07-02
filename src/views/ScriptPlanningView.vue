@@ -856,9 +856,20 @@ function formatDate(value?: string) {
   gap: 1rem;
 }
 
+.script-editor-panel .form-label {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.script-editor-panel .form-input {
+  width: 100%;
+}
+
 .outline-textarea {
   min-height: 7rem;
   line-height: 1.65;
+  resize: vertical;
 }
 
 .filename-panel {

@@ -758,7 +758,7 @@ function formatDate(value?: string) {
 
 .topic-detail {
   display: grid;
-  grid-template-columns: minmax(20rem, 0.72fr) minmax(0, 1.28fr);
+  grid-template-columns: minmax(17rem, 0.55fr) minmax(0, 1.45fr);
   gap: 1rem;
   align-items: start;
 }
@@ -897,8 +897,9 @@ function formatDate(value?: string) {
 }
 
 .script-textarea {
-  min-height: 25rem;
+  min-height: clamp(34rem, 62vh, 46rem);
   line-height: 1.72;
+  resize: vertical;
 }
 
 .actor-panel {

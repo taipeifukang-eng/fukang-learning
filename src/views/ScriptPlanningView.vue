@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import VideoUploader from '../components/VideoUploader.vue'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import { supabase } from '../lib/supabase'
@@ -40,6 +41,36 @@ const selectedCourseId = ref<string | null>(null)
 const selectedLessonId = ref<string>('')
 const newTopicName = ref('')
 const courseSearch = ref('')
+const editingTopicId = ref<number | null>(null)
+const topicNameInput = ref('')
+const topicSortOrderInput = ref(0)
+const topicEnabledInput = ref(true)
+const publishPanelOpen = ref(false)
+const publishSaving = ref(false)
+const publishError = ref('')
+const coverFile = ref<File | null>(null)
+const coverPreview = ref('')
+const coverUploading = ref(false)
+const courseEnabled = ref(true)
+const coursePortalSections = ref<string[]>([])
+const courseAudienceType = ref<'all' | 'org' | 'role'>('all')
+const courseAudienceId = ref<number | string | null>(null)
+const editingLessonId = ref<string | null>(null)
+const lessonTitle = ref('')
+const lessonSummary = ref('')
+const lessonDurationSeconds = ref(0)
+const lessonSortOrder = ref(0)
+const lessonBunnyVideoId = ref('')
+const showUploader = ref(false)
+
+const PORTAL_SECTIONS = [
+  { id: 'store-newcomer', label: '門市－新人培訓' },
+  { id: 'store-supervisor', label: '門市－主管課程' },
+  { id: 'store-general', label: '門市－通識學習' },
+  { id: 'pharmacist-clinical', label: '藥師－藥學專業' },
+  { id: 'pharmacist-general', label: '藥師－通識學習' },
+  { id: 'hq-general', label: '總部－通識學習' },
+] as const
 
 const courseForm = reactive({
   title: '',
@@ -110,7 +141,13 @@ const stats = computed(() => {
 
 onMounted(async () => {
   loading.value = true
-  await Promise.all([catalog.fetchCategories(), catalog.fetchCourses(), fetchScripts()])
+  await Promise.all([
+    catalog.fetchCategories(),
+    catalog.fetchCourses(),
+    catalog.fetchOrganizations(),
+    catalog.fetchAllRoles(),
+    fetchScripts(),
+  ])
   selectedCategoryId.value = categories.value[0]?.id ?? null
   loading.value = false
 })
@@ -175,6 +212,8 @@ function chooseTopic(category: Category) {
   selectedCourseId.value = null
   selectedLessonId.value = ''
   courseSearch.value = ''
+  publishPanelOpen.value = false
+  cancelTopicEdit()
   resetEditor()
 }
 
@@ -200,6 +239,59 @@ async function addTopic() {
   }
 }
 
+function startEditTopic(category: Category) {
+  editingTopicId.value = category.id
+  topicNameInput.value = category.name
+  topicSortOrderInput.value = category.sortOrder
+  topicEnabledInput.value = category.enabled
+}
+
+function cancelTopicEdit() {
+  editingTopicId.value = null
+  topicNameInput.value = ''
+}
+
+async function saveTopic() {
+  if (!canEdit.value || editingTopicId.value === null || !topicNameInput.value.trim()) return
+  saving.value = true
+  errorText.value = ''
+  try {
+    await catalog.upsertCategory({
+      id: editingTopicId.value,
+      name: topicNameInput.value,
+      sortOrder: topicSortOrderInput.value,
+      enabled: topicEnabledInput.value,
+    })
+    cancelTopicEdit()
+  } catch (err) {
+    errorText.value = err instanceof Error ? err.message : '儲存主題失敗'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function removeTopic(category: Category) {
+  if (!canEdit.value) return
+  const message = `確定刪除「${category.name}」？已指派的課程分類將被清空。`
+  if (!confirm(message)) return
+  saving.value = true
+  errorText.value = ''
+  try {
+    await catalog.deleteCategory(category.id)
+    if (selectedCategoryId.value === category.id) {
+      selectedCategoryId.value = categories.value[0]?.id ?? null
+      selectedCourseId.value = null
+      selectedLessonId.value = ''
+      resetEditor()
+    }
+    cancelTopicEdit()
+  } catch (err) {
+    errorText.value = err instanceof Error ? err.message : '刪除主題失敗'
+  } finally {
+    saving.value = false
+  }
+}
+
 function resetEditor() {
   courseForm.title = ''
   courseForm.outline = ''
@@ -210,6 +302,8 @@ function resetEditor() {
   scriptForm.videoFileName = ''
   scriptForm.sequenceNo = nextSequenceNo()
   scriptForm.notes = ''
+  publishPanelOpen.value = false
+  resetPublishForm()
 }
 
 function startNewCourse() {
@@ -222,11 +316,44 @@ function chooseCourse(course: Course) {
   selectedCourseId.value = course.id
   courseForm.title = course.title
   courseForm.outline = course.description || course.lessons[0]?.summary || ''
+  publishPanelOpen.value = false
+  loadPublishForm(course)
 
   const courseScripts = scriptsForCourse(course.id)
   const firstScript = courseScripts[0]
   selectedLessonId.value = firstScript?.lessonId ?? course.lessons[0]?.id ?? ''
   loadScript(firstScript ?? scripts.value.find((script) => script.lessonId === selectedLessonId.value))
+}
+
+function resetPublishForm() {
+  coverFile.value = null
+  coverPreview.value = ''
+  courseEnabled.value = true
+  coursePortalSections.value = []
+  courseAudienceType.value = 'all'
+  courseAudienceId.value = null
+  editingLessonId.value = null
+  showUploader.value = false
+  publishError.value = ''
+}
+
+function loadPublishForm(course: Course) {
+  coverFile.value = null
+  coverPreview.value = course.coverUrl
+  courseEnabled.value = course.enabled
+  coursePortalSections.value = [...(course.portalSections ?? [])]
+  const audience = course.audiences[0]
+  courseAudienceType.value = audience?.audienceType ?? 'all'
+  courseAudienceId.value = audience?.audienceId ?? null
+  editingLessonId.value = null
+  showUploader.value = false
+  publishError.value = ''
+}
+
+function openPublishPanel() {
+  if (!selectedCourse.value) return
+  loadPublishForm(selectedCourse.value)
+  publishPanelOpen.value = true
 }
 
 function loadScript(script?: LessonScript) {
@@ -300,6 +427,152 @@ function generateDraft() {
     '【收尾】',
     `${actorNames}：以上就是「${title}」的重點。看完後請回到學習平台確認進度，並依照主管安排練習。`,
   ].join('\n')
+}
+
+function normalizeBunnyVideoId(input: string) {
+  const value = input.trim()
+  if (!value) return ''
+  if (!value.includes('/')) return value
+  const cleaned = value.split('?')[0].replace(/\/+$/, '')
+  const parts = cleaned.split('/').filter(Boolean)
+  return parts[parts.length - 1] ?? ''
+}
+
+function audienceLabel(course: Course) {
+  const audience = course.audiences[0]
+  if (!audience || audience.audienceType === 'all') return '全體'
+  if (audience.audienceType === 'org') {
+    const org = catalog.organizations.find((item) => item.id === audience.audienceId)
+    return org?.shortName ?? `組織 #${audience.audienceId}`
+  }
+  const role = catalog.allRoles.find((item) => item.id === Number(audience.audienceId))
+  return role?.title ?? `角色 #${audience.audienceId}`
+}
+
+function onCoverFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  coverFile.value = file
+  coverPreview.value = URL.createObjectURL(file)
+}
+
+async function uploadCoverIfNeeded() {
+  if (!coverFile.value) return selectedCourse.value?.coverUrl ?? ''
+  coverUploading.value = true
+  try {
+    const ext = coverFile.value.name.split('.').pop() ?? 'jpg'
+    const path = `covers/${Date.now()}.${ext}`
+    const { error } = await supabase.storage
+      .from('course-covers')
+      .upload(path, coverFile.value, { upsert: true })
+    if (error) throw error
+    const { data } = supabase.storage.from('course-covers').getPublicUrl(path)
+    return data.publicUrl
+  } finally {
+    coverUploading.value = false
+  }
+}
+
+async function savePublishSettings() {
+  if (!canEdit.value || !selectedCourseId.value || !courseForm.title.trim()) return
+  publishSaving.value = true
+  publishError.value = ''
+  try {
+    const coverUrl = coverPreview.value ? await uploadCoverIfNeeded() : ''
+    const courseId = await catalog.upsertCourse({
+      id: selectedCourseId.value,
+      title: courseForm.title,
+      categoryId: selectedCategoryId.value,
+      description: courseForm.outline,
+      enabled: courseEnabled.value,
+      coverUrl,
+      portalSections: coursePortalSections.value,
+    })
+    await catalog.saveCourseAudiences(courseId, courseAudienceType.value === 'all'
+      ? [{ courseId, audienceType: 'all', audienceId: null }]
+      : [{ courseId, audienceType: courseAudienceType.value, audienceId: courseAudienceId.value === null ? null : Number(courseAudienceId.value) }],
+    )
+    await catalog.fetchCourses()
+    const course = catalog.courses.find((item) => item.id === courseId)
+    if (course) {
+      selectedCourseId.value = course.id
+      loadPublishForm(course)
+    }
+  } catch (err) {
+    publishError.value = err instanceof Error ? err.message : '儲存發布設定失敗'
+  } finally {
+    publishSaving.value = false
+  }
+}
+
+function startAddLesson() {
+  editingLessonId.value = 'new'
+  lessonTitle.value = ''
+  lessonSummary.value = ''
+  lessonDurationSeconds.value = 0
+  lessonSortOrder.value = selectedCourse.value?.lessons.length ?? 0
+  lessonBunnyVideoId.value = ''
+  showUploader.value = false
+}
+
+function startEditLesson(lesson: Lesson) {
+  editingLessonId.value = lesson.id
+  lessonTitle.value = lesson.title
+  lessonSummary.value = lesson.summary
+  lessonDurationSeconds.value = lesson.durationSeconds
+  lessonSortOrder.value = lesson.sortOrder
+  lessonBunnyVideoId.value = lesson.bunnyVideoId
+  showUploader.value = false
+}
+
+function cancelLesson() {
+  editingLessonId.value = null
+  showUploader.value = false
+}
+
+function onVideoUploaded(videoId: string, duration: number, title: string) {
+  lessonBunnyVideoId.value = normalizeBunnyVideoId(videoId)
+  if (!lessonTitle.value) lessonTitle.value = title
+  lessonDurationSeconds.value = duration
+  showUploader.value = false
+}
+
+async function saveLesson() {
+  if (!selectedCourseId.value || !lessonTitle.value.trim()) return
+  const normalizedVideoId = normalizeBunnyVideoId(lessonBunnyVideoId.value)
+  if (!normalizedVideoId) {
+    publishError.value = '請先上傳影片，或填入 Bunny Video ID 才能儲存。'
+    return
+  }
+  publishSaving.value = true
+  publishError.value = ''
+  try {
+    await catalog.upsertLesson({
+      id: editingLessonId.value === 'new' ? undefined : editingLessonId.value ?? undefined,
+      courseId: selectedCourseId.value,
+      title: lessonTitle.value,
+      summary: lessonSummary.value,
+      durationSeconds: lessonDurationSeconds.value,
+      sortOrder: lessonSortOrder.value,
+      bunnyVideoId: normalizedVideoId,
+      coverUrl: '',
+    })
+    await catalog.fetchCourses()
+    const course = catalog.courses.find((item) => item.id === selectedCourseId.value)
+    if (course) chooseCourse(course)
+    publishPanelOpen.value = true
+    editingLessonId.value = null
+  } catch (err) {
+    publishError.value = err instanceof Error ? err.message : '儲存影片失敗'
+  } finally {
+    publishSaving.value = false
+  }
+}
+
+async function removeLesson(lessonId: string) {
+  if (!selectedCourseId.value || !confirm('確定刪除此影片？')) return
+  await catalog.deleteLesson(lessonId, selectedCourseId.value)
 }
 
 function addActor() {
@@ -451,17 +724,37 @@ function formatDate(value?: string) {
 
       <div v-if="loading" class="empty-state">讀取課程架構中…</div>
       <div v-else class="topic-grid">
-        <button
+        <article
           v-for="category in categories"
           :key="category.id"
           class="topic-card"
           :class="{ 'is-active': selectedCategoryId === category.id }"
-          type="button"
-          @click="chooseTopic(category)"
         >
-          <strong>{{ category.name }}</strong>
-          <span>{{ topicCourseCount(category.id) }} 門課程</span>
-        </button>
+          <form v-if="editingTopicId === category.id" class="topic-edit-form" @submit.prevent="saveTopic">
+            <input v-model="topicNameInput" class="form-input" required />
+            <div class="topic-edit-form__row">
+              <input v-model.number="topicSortOrderInput" class="form-input" type="number" min="0" aria-label="排序" />
+              <label class="mini-toggle">
+                <input v-model="topicEnabledInput" type="checkbox" />
+                啟用
+              </label>
+            </div>
+            <div class="topic-actions">
+              <button class="table-action" type="submit" :disabled="saving">儲存</button>
+              <button class="table-action" type="button" @click="cancelTopicEdit">取消</button>
+            </div>
+          </form>
+          <template v-else>
+            <button class="topic-card__main" type="button" @click="chooseTopic(category)">
+              <strong>{{ category.name }}</strong>
+              <span>{{ topicCourseCount(category.id) }} 門課程</span>
+            </button>
+            <div v-if="canEdit" class="topic-actions">
+              <button class="table-action" type="button" @click="startEditTopic(category)">編輯</button>
+              <button class="table-action table-action--danger" type="button" @click="removeTopic(category)">刪除</button>
+            </div>
+          </template>
+        </article>
       </div>
     </section>
 
@@ -508,16 +801,27 @@ function formatDate(value?: string) {
         </div>
       </aside>
 
-      <form class="script-editor-panel" @submit.prevent="saveProduction">
-        <div class="editor-title-row">
-          <div>
-            <span>課程腳本</span>
-            <h3>{{ selectedCourseId ? '編輯課程與腳本' : '新增此主題的課程' }}</h3>
+      <section class="script-editor-panel">
+        <form class="script-main-form" @submit.prevent="saveProduction">
+          <div class="editor-title-row">
+            <div>
+              <span>課程腳本</span>
+              <h3>{{ selectedCourseId ? '編輯課程與腳本' : '新增此主題的課程' }}</h3>
+            </div>
+            <div class="editor-title-actions">
+              <span class="save-state">最後更新：{{ formatDate(selectedScript?.updatedAt) }}</span>
+              <button
+                class="btn"
+                type="button"
+                :disabled="!selectedCourse"
+                @click="openPublishPanel"
+              >
+                發布設定與影片
+              </button>
+            </div>
           </div>
-          <span class="save-state">最後更新：{{ formatDate(selectedScript?.updatedAt) }}</span>
-        </div>
 
-        <div class="editor-grid">
+          <div class="editor-grid">
           <label class="form-label">課程題目 *
             <input
               v-model="courseForm.title"
@@ -603,7 +907,138 @@ function formatDate(value?: string) {
             {{ saving ? '儲存中…' : '儲存課程腳本' }}
           </button>
         </div>
-      </form>
+        </form>
+
+        <section v-if="publishPanelOpen && selectedCourse" class="publish-panel">
+          <div class="publish-panel__head">
+            <div>
+              <span class="script-kicker">Publish & Video</span>
+              <h3>發布設定與影片章節</h3>
+            </div>
+            <button class="btn" type="button" @click="publishPanelOpen = false">收起</button>
+          </div>
+
+          <p v-if="publishError" class="script-error">{{ publishError }}</p>
+
+          <form class="publish-form" @submit.prevent="savePublishSettings">
+            <div class="publish-grid">
+              <div class="form-label">學習入口方塊
+                <div class="portal-section-checks">
+                  <label v-for="section in PORTAL_SECTIONS" :key="section.id" class="section-check">
+                    <input v-model="coursePortalSections" type="checkbox" :value="section.id" :disabled="!canEdit" />
+                    {{ section.label }}
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-label">封面圖
+                <div class="cover-picker">
+                  <img v-if="coverPreview" :src="coverPreview" alt="封面預覽" />
+                  <span v-else>無封面</span>
+                  <label class="btn">
+                    {{ coverUploading ? '上傳中...' : '選取圖片' }}
+                    <input type="file" accept="image/*" :disabled="coverUploading || !canEdit" @change="onCoverFileChange" />
+                  </label>
+                  <button v-if="coverPreview" class="btn" type="button" :disabled="!canEdit" @click="coverPreview = ''; coverFile = null">移除</button>
+                </div>
+              </div>
+
+              <label class="form-label">適用對象
+                <select v-model="courseAudienceType" class="form-input" :disabled="!canEdit">
+                  <option value="all">全體</option>
+                  <option value="org">指定組織</option>
+                  <option value="role">指定角色</option>
+                </select>
+              </label>
+
+              <label v-if="courseAudienceType === 'org'" class="form-label">選擇組織
+                <select v-model="courseAudienceId" class="form-input" :disabled="!canEdit">
+                  <option :value="null">請選擇</option>
+                  <option v-for="org in catalog.organizations" :key="org.id" :value="org.id">{{ org.shortName }}</option>
+                </select>
+              </label>
+
+              <label v-if="courseAudienceType === 'role'" class="form-label">選擇角色
+                <select v-model="courseAudienceId" class="form-input" :disabled="!canEdit">
+                  <option :value="null">請選擇</option>
+                  <option v-for="role in catalog.allRoles" :key="role.id" :value="role.id">{{ role.title }}</option>
+                </select>
+              </label>
+
+              <label class="shoot-toggle publish-toggle">
+                <input v-model="courseEnabled" type="checkbox" :disabled="!canEdit" />
+                <span>{{ courseEnabled ? '課程上架中' : '課程目前下架' }}</span>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn--primary" type="submit" :disabled="!canEdit || publishSaving">
+                {{ publishSaving ? '儲存中…' : '儲存發布設定' }}
+              </button>
+            </div>
+          </form>
+
+          <section class="lesson-panel">
+            <div class="actor-panel__head">
+              <strong>影片章節（{{ selectedCourse.lessons.length }} 支）</strong>
+              <button v-if="canEdit && editingLessonId === null" class="btn btn--primary" type="button" @click="startAddLesson">新增影片</button>
+            </div>
+
+            <form v-if="editingLessonId !== null" class="lesson-form" @submit.prevent="saveLesson">
+              <label class="form-label">影片標題 *
+                <input v-model="lessonTitle" class="form-input" required />
+              </label>
+              <label class="form-label">摘要說明
+                <textarea v-model="lessonSummary" class="form-input" rows="2" />
+              </label>
+              <label class="form-label">Bunny Video ID
+                <div class="input-with-button">
+                  <input v-model="lessonBunnyVideoId" class="form-input" placeholder="上傳後自動填入，或手動貼上" />
+                  <button class="btn" type="button" @click="showUploader = !showUploader">
+                    {{ showUploader ? '收起' : '上傳影片' }}
+                  </button>
+                </div>
+              </label>
+
+              <VideoUploader v-if="showUploader && selectedCourseId" :course-id="selectedCourseId" :on-uploaded="onVideoUploaded" />
+
+              <div class="editor-grid">
+                <label class="form-label">時長（秒）
+                  <input v-model.number="lessonDurationSeconds" class="form-input" type="number" min="0" />
+                </label>
+                <label class="form-label">排序
+                  <input v-model.number="lessonSortOrder" class="form-input" type="number" min="0" />
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn--primary" type="submit" :disabled="publishSaving">儲存影片</button>
+                <button class="btn" type="button" @click="cancelLesson">取消</button>
+              </div>
+            </form>
+
+            <div class="lesson-list">
+              <div v-if="selectedCourse.lessons.length === 0" class="empty-state empty-state--compact">
+                尚無影片，按「新增影片」即可上傳或填入 Bunny Video ID。
+              </div>
+              <div v-for="lesson in selectedCourse.lessons" :key="lesson.id" class="lesson-row">
+                <div>
+                  <strong>{{ lesson.sortOrder }}. {{ lesson.title }}</strong>
+                  <span>{{ lesson.summary || '尚未填寫摘要' }}</span>
+                </div>
+                <div class="lesson-row__meta">
+                  <span>{{ Math.floor(lesson.durationSeconds / 60) }}:{{ String(lesson.durationSeconds % 60).padStart(2, '0') }}</span>
+                  <small>{{ lesson.bunnyVideoId || '尚未綁定影片' }}</small>
+                </div>
+                <div v-if="canEdit" class="topic-actions">
+                  <button class="table-action" type="button" @click="startEditLesson(lesson)">編輯</button>
+                  <button class="table-action table-action--danger" type="button" @click="removeLesson(lesson.id)">刪除</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
     </section>
   </div>
 </template>
@@ -695,6 +1130,7 @@ function formatDate(value?: string) {
 .topic-board__head,
 .course-column__head,
 .editor-title-row,
+.editor-title-actions,
 .script-toolbar,
 .actor-panel__head,
 .input-with-button,
@@ -724,7 +1160,7 @@ function formatDate(value?: string) {
   gap: 0.75rem;
 }
 
-.topic-card,
+.topic-card__main,
 .course-item {
   width: 100%;
   border: 1px solid var(--admin-border);
@@ -738,22 +1174,66 @@ function formatDate(value?: string) {
   display: grid;
   gap: 0.4rem;
   min-height: 5.6rem;
-  padding: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--admin-border);
   border-radius: 1rem;
+  background: var(--admin-surface);
+  transition: 160ms ease;
 }
 
-.topic-card span {
+.topic-card__main {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+}
+
+.topic-card span,
+.topic-card__main span {
   color: var(--admin-ink-muted);
   font-size: 0.82rem;
 }
 
 .topic-card:hover,
 .topic-card.is-active,
+.topic-card__main:hover,
 .course-item:hover,
 .course-item.is-active {
   border-color: rgba(var(--admin-primary-rgb), 0.46);
   background: var(--admin-primary-soft);
   transform: translateY(-1px);
+}
+
+.topic-edit-form,
+.script-main-form,
+.publish-form,
+.lesson-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.topic-edit-form__row,
+.topic-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.topic-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.mini-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  color: var(--admin-ink-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .topic-detail {
@@ -946,10 +1426,141 @@ function formatDate(value?: string) {
   color: var(--admin-danger);
 }
 
+.publish-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--admin-border);
+}
+
+.publish-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.publish-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.portal-section-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.section-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.7rem;
+  background: var(--admin-surface);
+  color: var(--admin-ink-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.section-check input,
+.mini-toggle input {
+  accent-color: var(--admin-primary);
+}
+
+.cover-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cover-picker img,
+.cover-picker > span {
+  width: 7.5rem;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.7rem;
+}
+
+.cover-picker img {
+  object-fit: cover;
+}
+
+.cover-picker > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-ink-muted);
+  background: var(--admin-surface);
+  font-size: 0.82rem;
+}
+
+.cover-picker input[type='file'] {
+  display: none;
+}
+
+.publish-toggle {
+  align-self: end;
+}
+
+.lesson-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 1rem;
+  background: var(--admin-surface);
+}
+
+.lesson-form {
+  padding: 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--admin-surface-raised) 80%, transparent);
+}
+
+.lesson-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lesson-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.8rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--admin-surface-raised) 70%, transparent);
+}
+
+.lesson-row strong,
+.lesson-row span,
+.lesson-row small {
+  display: block;
+}
+
+.lesson-row span,
+.lesson-row small {
+  color: var(--admin-ink-muted);
+}
+
+.lesson-row__meta {
+  text-align: right;
+  min-width: 0;
+}
+
 @media (max-width: 1120px) {
   .script-flow-hero,
   .topic-board__head,
-  .topic-detail {
+  .topic-detail,
+  .publish-grid,
+  .lesson-row {
     grid-template-columns: 1fr;
   }
 
@@ -960,6 +1571,10 @@ function formatDate(value?: string) {
 
   .filename-panel {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-row__meta {
+    text-align: left;
   }
 }
 
@@ -972,7 +1587,10 @@ function formatDate(value?: string) {
 
   .course-item__meta,
   .actor-row,
-  .input-with-button {
+  .input-with-button,
+  .editor-title-row,
+  .editor-title-actions,
+  .publish-panel__head {
     flex-direction: column;
     align-items: stretch;
   }

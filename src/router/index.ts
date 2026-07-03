@@ -116,10 +116,10 @@ const router = createRouter({
         {
           path: 'admin/courses',
           name: 'admin-courses',
-          component: () => import('../views/CoursesManagementView.vue'),
+          redirect: '/admin/scripts',
           meta: {
-            title: '課程管理',
-            icon: 'video',
+            title: '腳本設計',
+            icon: 'fileText',
             group: '課程管理',
             requiresAuth: true,
             permission: 'courses:view',
@@ -128,13 +128,13 @@ const router = createRouter({
         {
           path: 'admin/categories',
           name: 'admin-categories',
-          component: () => import('../views/CategoriesView.vue'),
+          redirect: '/admin/scripts',
           meta: {
-            title: '分類管理',
-            icon: 'tag',
+            title: '腳本設計',
+            icon: 'fileText',
             group: '課程管理',
             requiresAuth: true,
-            permission: 'categories:edit',
+            permission: 'courses:view',
           },
         },
         {
